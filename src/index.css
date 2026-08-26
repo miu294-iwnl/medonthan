@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #07080a;
+  --color-panel: #101317;
+  --color-panel-2: #171b21;
+  --color-line: #262c35;
+  --color-fg: #e8ecf1;
+  --color-muted: #8b95a3;
+  --color-lime: #c6ff3f;
+  --color-lime-dim: #9bcc1f;
+  --color-flame: #ff5a3c;
+  --color-ice: #4cc9f0;
+  --color-gold: #f0c040;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbars until scrolling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: var(--color-line) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.panel-enter {
+  animation: slide-in-right 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.panel-exit {
+  animation: slide-out-right 0.22s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+.overlay-enter {
+  animation: fade-in 0.22s ease forwards;
+}
+
+.overlay-exit {
+  animation: fade-out 0.2s ease forwards;
+}
+
+@keyframes rainbow-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.lnd-btn {
+  background: linear-gradient(90deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff, #c77dff, #ff6b6b);
+  background-size: 300% 300%;
+  animation: rainbow-shift 3s linear infinite;
+  border-color: transparent;
+  color: #fff;
+}
+
+.lnd-btn:hover {
+  filter: brightness(1.15);
+}
+
+@keyframes shimmer-gold {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.beaten-shimmer {
+  background: linear-gradient(
+    105deg,
+    #c8922a 0%,
+    #f0c040 35%,
+    #fde68a 50%,
+    #f0c040 65%,
+    #c8922a 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer-gold 2.8s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.beaten-badge {
+  background: linear-gradient(
+    105deg,
+    #c8922a 0%,
+    #f0c040 40%,
+    #fde68a 55%,
+    #f0c040 70%,
+    #c8922a 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer-gold 2.8s linear infinite;
+}
+
+.beaten-btn {
+  background: linear-gradient(105deg, #c8922a22 0%, #f0c04018 50%, #c8922a22 100%);
+  border-color: #f0c04055;
+  color: #f0c040;
+  box-shadow: 0 0 8px #f0c04022;
+}
+
+/* Steam About This Game rich description - strictly using website fonts */
+.steam-about-content,
+.steam-about-content * {
+  font-family: var(--font-sans) !important;
+  color: rgba(232, 236, 241, 0.88);
+}
+
+.steam-about-content {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.steam-about-content h1,
+.steam-about-content h2,
+.steam-about-content h3,
+.steam-about-content h4,
+.steam-about-content .bb_header,
+.steam-about-content .bb_tag {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--color-fg) !important;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+}
+
+.steam-about-content p,
+.steam-about-content .bb_paragraph {
+  margin-bottom: 0.75rem;
+}
+
+.steam-about-content img,
+.steam-about-content video,
+.steam-about-content .bb_img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+  margin: 0.75rem 0;
+  display: block;
+}
+
+.steam-about-content .bb_img_ctn {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.steam-about-content ul,
+.steam-about-content .bb_ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.steam-about-content li {
+  margin-bottom: 0.25rem;
+}
+
+.steam-about-content strong,
+.steam-about-content b {
+  font-weight: 600 !important;
+  color: var(--color-fg) !important;
+}
+
+.steam-about-content em,
+.steam-about-content i {
+  font-style: italic !important;
+  color: var(--color-muted) !important;
+}
+
+.steam-about-content a {
+  color: var(--color-ice) !important;
+  text-decoration: underline;
+}

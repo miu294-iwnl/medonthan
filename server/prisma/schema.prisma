@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Game {
+  id              String   @id @default(uuid())
+  title           String
+  studio          String   @default("Unknown Studio")
+  publisher       String   @default("Unknown Publisher")
+  genre           String   @default("Action")
+  genreEn         String?
+  year            Int      @default(2025)
+  hours           Int      @default(0)
+  platform        String   @default("Steam")
+  priority        String   @default("medium")
+  status          String   @default("backlog")
+  cover           String
+  screenshots     String   @default("[]")
+  videos          String?  @default("[]")
+  description     String   @default("")
+  descriptionEn   String?  @default("")
+  releaseDate     String   @default("TBA")
+  releaseDateEn   String?  @default("TBA")
+  tags            String   @default("[]")
+  tagsEn          String?  @default("[]")
+  addedAt         Float
+  price           Int?     @default(0)
+  originalPrice   Int?     @default(0)
+  discountPercent Int?     @default(0)
+  hoursPlayed     Int?     @default(0)
+  isOwned         Boolean? @default(false)
+  isEarlyAccess   Boolean? @default(false)
+  lndLink         String?
+  storeId         String?
+  storeType       String?
+}

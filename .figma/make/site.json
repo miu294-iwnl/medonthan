@@ -1,0 +1,11 @@
+{
+  "title": "medonthan",
+  "description": "Organize and manage your gaming desires with a wishlist app that lets users view, add, and select games they want to play in the future.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
