@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import dotenv from "dotenv";
-import { searchSteam, getSteamGameDetails, getSteamOwnedGamesData, getSteamAccountStats } from "../services/steamService.js";
+import { searchSteam, getSteamGameDetails, getSteamOwnedGamesData, getSteamOwnedGamesMap, getSteamAccountStats } from "../services/steamService.js";
 import { searchXbox, getXboxGameDetails } from "../services/xboxService.js";
 
 // Always get fresh environment variables in case .env was modified while running
