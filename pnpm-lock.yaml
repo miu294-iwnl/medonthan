@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      devtools-detector:
+        specifier: ^2.0.25
+        version: 2.0.25
       hls.js:
         specifier: ^1.7.1
         version: 1.7.1
@@ -345,12 +348,18 @@ packages:
       babel-plugin-react-compiler:
         optional: true
 
+  compare-versions@3.6.0:
+    resolution: {integrity: sha512-W6Af2Iw1z4CB7q4uU4hv646dW9GQuBM+YpC0UvUCWSD8w90SJjp+ujJuXaEMtAXBtSqGfMPuFOVn4/+FlaqfBA==}
+
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  devtools-detector@2.0.25:
+    resolution: {integrity: sha512-Jp2kaQ3Plf4LDDrQPR5bMYvc6htUefuh1Gda1HWysUK/V1U1f2x40PuJYnTMyvxM1PRr7X0ej/FmKBXaNlV9xA==}
 
   enhanced-resolve@5.20.1:
     resolution: {integrity: sha512-Qohcme7V1inbAfvjItgw0EaxVX5q2rdVEZHRBrEQdRZTssLDGsL8Lwrznl8oQ/6kuTJONLaDcGjkNP247XEhcA==}
@@ -775,9 +784,15 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.7
       vite: 8.0.5(@types/node@22.19.17)(jiti@2.6.1)
 
+  compare-versions@3.6.0: {}
+
   csstype@3.2.3: {}
 
   detect-libc@2.1.2: {}
+
+  devtools-detector@2.0.25:
+    dependencies:
+      compare-versions: 3.6.0
 
   enhanced-resolve@5.20.1:
     dependencies:
