@@ -44,11 +44,35 @@ export async function searchSteam(query) {
 }
 
 /**
+ * Parse Steam review score text & numbers into frontend Review sentiment
+ */
+export function parseSteamSentiment(desc, totalPositive = 0, totalReviews = 0) {
+  const d = (desc || "").toLowerCase().trim();
+  if (d.includes("overwhelmingly positive") || d.includes("cực kỳ tích cực")) return "overwhelmingly_positive";
+  if (d.includes("very positive") || d.includes("rất tích cực")) return "very_positive";
+  if (d.includes("mostly positive") || d.includes("phần lớn tích cực") || d.includes("positive") || d.includes("tích cực")) return "mostly_positive";
+  if (d.includes("mostly negative") || d.includes("phần lớn tiêu cực")) return "mostly_negative";
+  if (d.includes("very negative") || d.includes("overwhelmingly negative") || d.includes("negative") || d.includes("tiêu cực")) return "negative";
+  if (d.includes("mixed") || d.includes("hỗn hợp")) return "mixed";
+
+  if (totalReviews > 0) {
+    const pct = (totalPositive / totalReviews) * 100;
+    if (pct >= 95 && totalReviews >= 500) return "overwhelmingly_positive";
+    if (pct >= 80) return "very_positive";
+    if (pct >= 70) return "mostly_positive";
+    if (pct >= 40) return "mixed";
+    if (pct >= 20) return "mostly_negative";
+    return "negative";
+  }
+  return "mostly_positive";
+}
+
+/**
  * Get detailed game info from Steam Store API (Vietnam region & Vietnamese locale)
  */
 export async function getSteamGameDetails(appId) {
   try {
-    const [vnApiRes, enApiRes, vnPageRes, enPageRes] = await Promise.allSettled([
+    const [vnApiRes, enApiRes, vnPageRes, enPageRes, allReviewsRes, recentReviewsRes] = await Promise.allSettled([
       axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&cc=vn&l=vietnamese`, { timeout: 8000 }),
       axios.get(`https://store.steampowered.com/api/appdetails?appids=${appId}&cc=us&l=english`, { timeout: 8000 }),
       axios.get(`https://store.steampowered.com/app/${appId}/?l=vietnamese`, {
@@ -65,6 +89,8 @@ export async function getSteamGameDetails(appId) {
           "Cookie": "birthtime=283993201; mature_content=1; lastagecheckage=1-January-1990; wants_mature_content=1",
         },
       }),
+      axios.get(`https://store.steampowered.com/appreviews/${appId}?json=1&num_per_page=0&purchase_type=all`, { timeout: 6000 }),
+      axios.get(`https://store.steampowered.com/appreviews/${appId}?json=1&num_per_page=0&purchase_type=all&day_range=30`, { timeout: 6000 }),
     ]);
 
     const dataVn = vnApiRes.status === "fulfilled" ? vnApiRes.value.data?.[appId]?.data : null;
@@ -73,6 +99,27 @@ export async function getSteamGameDetails(appId) {
 
     if (!data) {
       throw new Error(`Failed to fetch details for Steam AppId: ${appId}`);
+    }
+
+    // Process Steam reviews
+    let reviewAll = null;
+    const allSummary = allReviewsRes.status === "fulfilled" ? allReviewsRes.value.data?.query_summary : null;
+    if (allSummary && allSummary.total_reviews > 0) {
+      reviewAll = {
+        count: allSummary.total_reviews,
+        sentiment: parseSteamSentiment(allSummary.review_score_desc, allSummary.total_positive, allSummary.total_reviews),
+      };
+    }
+
+    let reviewRecent = null;
+    const recentSummary = recentReviewsRes.status === "fulfilled" ? recentReviewsRes.value.data?.query_summary : null;
+    if (recentSummary && recentSummary.total_reviews > 0) {
+      reviewRecent = {
+        count: recentSummary.total_reviews,
+        sentiment: parseSteamSentiment(recentSummary.review_score_desc, recentSummary.total_positive, recentSummary.total_reviews),
+      };
+    } else if (reviewAll) {
+      reviewRecent = reviewAll;
     }
 
     // Process screenshots
@@ -204,6 +251,8 @@ export async function getSteamGameDetails(appId) {
       descriptionEn,
       releaseDate: releaseDateStr,
       releaseDateEn: releaseDateEnStr,
+      reviewRecent,
+      reviewAll,
       tags,
       tagsEn,
       price,

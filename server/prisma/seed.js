@@ -31,7 +31,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "1361210",
     "storeType": "steam",
-    "addedAt": 1787735915901
+    "addedAt": 1787735915901,
+    "reviewRecent": "{\"count\":91345,\"sentiment\":\"mostly_positive\"}",
+    "reviewAll": "{\"count\":91345,\"sentiment\":\"mostly_positive\"}"
   },
   {
     "id": "aeb1cff7-f637-40bb-b7b4-defdd354cfc2",
@@ -63,7 +65,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "250900",
     "storeType": "steam",
-    "addedAt": 1787679458261
+    "addedAt": 1787679458261,
+    "reviewRecent": "{\"count\":177897,\"sentiment\":\"overwhelmingly_positive\"}",
+    "reviewAll": "{\"count\":177897,\"sentiment\":\"overwhelmingly_positive\"}"
   },
   {
     "id": "f493dd5a-82c4-4275-a90e-895024f79333",
@@ -95,7 +99,9 @@ export const SEED_GAMES = [
     "lndLink": "abc.com",
     "storeId": "1238840",
     "storeType": "steam",
-    "addedAt": 1787679441975
+    "addedAt": 1787679441975,
+    "reviewRecent": "{\"count\":53200,\"sentiment\":\"very_positive\"}",
+    "reviewAll": "{\"count\":53200,\"sentiment\":\"very_positive\"}"
   },
   {
     "id": "0c40805b-2183-4809-aafb-0c24267a2d5a",
@@ -127,7 +133,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "3240220",
     "storeType": "steam",
-    "addedAt": 1787673956050
+    "addedAt": 1787673956050,
+    "reviewRecent": "{\"count\":79377,\"sentiment\":\"very_positive\"}",
+    "reviewAll": "{\"count\":79377,\"sentiment\":\"very_positive\"}"
   },
   {
     "id": "92a8e344-398d-4c67-8472-c48e36cc846a",
@@ -191,7 +199,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "730",
     "storeType": "steam",
-    "addedAt": 1787672145956
+    "addedAt": 1787672145956,
+    "reviewRecent": "{\"count\":2602807,\"sentiment\":\"very_positive\"}",
+    "reviewAll": "{\"count\":2602807,\"sentiment\":\"very_positive\"}"
   },
   {
     "id": "9b497ee8-c17f-47eb-807f-b050da30410a",
@@ -223,7 +233,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "4001890",
     "storeType": "steam",
-    "addedAt": 1787671931974
+    "addedAt": 1787671931974,
+    "reviewRecent": "{\"count\":12162,\"sentiment\":\"overwhelmingly_positive\"}",
+    "reviewAll": "{\"count\":12162,\"sentiment\":\"overwhelmingly_positive\"}"
   },
   {
     "id": "f853f7dc-74a2-445b-9ffc-5a7c0ec0633f",
@@ -255,7 +267,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "1363080",
     "storeType": "steam",
-    "addedAt": 1787671894330
+    "addedAt": 1787671894330,
+    "reviewRecent": "{\"count\":44527,\"sentiment\":\"very_positive\"}",
+    "reviewAll": "{\"count\":44527,\"sentiment\":\"very_positive\"}"
   },
   {
     "id": "7872fb0f-b524-4131-95ba-ff280f063ef8",
@@ -287,7 +301,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "1091500",
     "storeType": "steam",
-    "addedAt": 1787667281897
+    "addedAt": 1787667281897,
+    "reviewRecent": "{\"count\":415953,\"sentiment\":\"very_positive\"}",
+    "reviewAll": "{\"count\":415953,\"sentiment\":\"very_positive\"}"
   },
   {
     "id": "bdcf12c3-e465-4fb0-9971-a30dd18f5fba",
@@ -351,7 +367,9 @@ export const SEED_GAMES = [
     "lndLink": null,
     "storeId": "413150",
     "storeType": "steam",
-    "addedAt": 1787666041509
+    "addedAt": 1787666041509,
+    "reviewRecent": "{\"count\":465067,\"sentiment\":\"overwhelmingly_positive\"}",
+    "reviewAll": "{\"count\":465067,\"sentiment\":\"overwhelmingly_positive\"}"
   }
 ];
 

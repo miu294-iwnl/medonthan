@@ -54,11 +54,27 @@ function formatGame(game) {
     (Array.isArray(parsedTagsEn) && parsedTagsEn.some((t) => t.toLowerCase() === "early access"))
   );
 
+  let parsedReviewRecent = undefined;
+  if (game.reviewRecent) {
+    try {
+      parsedReviewRecent = typeof game.reviewRecent === "string" ? JSON.parse(game.reviewRecent) : game.reviewRecent;
+    } catch {}
+  }
+
+  let parsedReviewAll = undefined;
+  if (game.reviewAll) {
+    try {
+      parsedReviewAll = typeof game.reviewAll === "string" ? JSON.parse(game.reviewAll) : game.reviewAll;
+    } catch {}
+  }
+
   return {
     ...game,
     genreEn: game.genreEn || game.genre || "Action",
     releaseDateEn: game.releaseDateEn || game.releaseDate || "TBA",
     descriptionEn: game.descriptionEn || game.description || "",
+    reviewRecent: parsedReviewRecent,
+    reviewAll: parsedReviewAll,
     status,
     isOwned,
     isEarlyAccess,
@@ -120,6 +136,25 @@ export async function addGame(req, res) {
     const effectivePlatform = platform || "Steam";
     const initialHours = typeof hours === "number" ? hours : (parseInt(hours, 10) || 0);
 
+    // Check if game already exists in DB
+    const existingGames = await prisma.game.findMany({
+      select: { id: true, title: true, storeId: true }
+    });
+    const normTitle = (title || "").toLowerCase().trim();
+    const isDuplicate = existingGames.some((g) => {
+      if (storeId && g.storeId && String(g.storeId) === String(storeId)) {
+        return true;
+      }
+      if (normTitle && g.title.toLowerCase().trim() === normTitle) {
+        return true;
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      return res.status(409).json({ error: "Game này đã có sẵn", alreadyExists: true });
+    }
+
     let gameData = {
       title: title || "New Game",
       studio: "Unknown Studio",
@@ -169,6 +204,8 @@ export async function addGame(req, res) {
         gameData.descriptionEn = steamDetails.descriptionEn;
         gameData.releaseDate = steamDetails.releaseDate;
         gameData.releaseDateEn = steamDetails.releaseDateEn;
+        gameData.reviewRecent = steamDetails.reviewRecent ? JSON.stringify(steamDetails.reviewRecent) : null;
+        gameData.reviewAll = steamDetails.reviewAll ? JSON.stringify(steamDetails.reviewAll) : null;
         gameData.tags = JSON.stringify(steamDetails.tags);
         gameData.tagsEn = JSON.stringify(steamDetails.tagsEn);
         gameData.price = steamDetails.price;
@@ -463,6 +500,20 @@ export async function syncPlaytime(req, res) {
           if (storeDetails.cover && (!g.cover || g.cover.includes("unsplash"))) {
             updateData.cover = storeDetails.cover;
             storeChanged = true;
+          }
+          if (storeDetails.reviewRecent !== undefined) {
+            const revRecentStr = storeDetails.reviewRecent ? JSON.stringify(storeDetails.reviewRecent) : null;
+            if (revRecentStr !== g.reviewRecent) {
+              updateData.reviewRecent = revRecentStr;
+              storeChanged = true;
+            }
+          }
+          if (storeDetails.reviewAll !== undefined) {
+            const revAllStr = storeDetails.reviewAll ? JSON.stringify(storeDetails.reviewAll) : null;
+            if (revAllStr !== g.reviewAll) {
+              updateData.reviewAll = revAllStr;
+              storeChanged = true;
+            }
           }
 
           if (storeChanged) {

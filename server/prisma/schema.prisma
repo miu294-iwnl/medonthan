@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Game {
@@ -26,6 +26,8 @@ model Game {
   descriptionEn   String?  @default("")
   releaseDate     String   @default("TBA")
   releaseDateEn   String?  @default("TBA")
+  reviewRecent    String?
+  reviewAll       String?
   tags            String   @default("[]")
   tagsEn          String?  @default("[]")
   addedAt         Float

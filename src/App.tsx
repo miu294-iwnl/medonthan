@@ -112,6 +112,7 @@ const T = {
     seeLess: "SHOW LESS ↑",
     videoBadge: "TRAILER",
     estHoursLabel: "EST. HOURS (OPTIONAL)",
+    gameAlreadyExists: "Game is already in your list",
     timeAgo: (ms: number) => {
       const s = Math.floor(ms / 1000)
       if (s < 60)  return "just now"
@@ -191,6 +192,7 @@ const T = {
     seeLess: "THU GỌN ↑",
     videoBadge: "TRAILER",
     estHoursLabel: "GIỜ DỰ KIẾN (TÙY CHỌN)",
+    gameAlreadyExists: "Game này đã có sẵn",
     timeAgo: (ms: number) => {
       const s = Math.floor(ms / 1000)
       if (s < 60)  return "vừa xong"
@@ -233,7 +235,7 @@ const getGameReleaseDate = (game: Game, lang: Lang) => (lang === "en" && game.re
 const getGameTags = (game: Game, lang: Lang) => (lang === "en" && game.tagsEn && game.tagsEn.length > 0) ? game.tagsEn : game.tags
 const getGameDescription = (game: Game, lang: Lang) => (lang === "en" && game.descriptionEn) ? game.descriptionEn : game.description
 const sentimentColor: Record<Review["sentiment"], string> = {
-  overwhelmingly_positive: "text-lime",
+  overwhelmingly_positive: "text-[#c084fc]",
   very_positive: "text-[#4fc3f7]",
   mostly_positive: "text-[#66bb6a]",
   mixed: "text-[#f5c518]",
@@ -287,7 +289,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toastInfo, setToastInfo] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [lang, setLang] = useState<Lang>(() => {
     try {
       const s = localStorage.getItem(LANG_KEY)
@@ -388,9 +390,9 @@ export default function App() {
     return () => window.removeEventListener("keydown", fn)
   }, [])
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 4000)
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToastInfo({ message: msg, type })
+    setTimeout(() => setToastInfo(null), 4000)
   }
 
   const visible = useMemo(() => games.filter((g) => {
@@ -474,13 +476,26 @@ export default function App() {
   }
 
   const addGame = async (title: string, platform: string, storeId?: string, storeType?: string, lndLink?: string, hours?: number) => {
+    const normTitle = (title || "").toLowerCase().trim()
+    const alreadyExists = games.some(
+      (g) => (storeId && String(g.storeId) === String(storeId)) || (normTitle && g.title.toLowerCase().trim() === normTitle)
+    )
+
+    if (alreadyExists) {
+      showToast(t.gameAlreadyExists, "error")
+      setAdding(false)
+      return
+    }
+
     try {
       const res = await fetch("/api/games", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, platform, storeId, storeType, lndLink, hours }),
       })
-      if (res.ok) {
+      if (res.status === 409) {
+        showToast(t.gameAlreadyExists, "error")
+      } else if (res.ok) {
         const created = await res.json()
         setGames((prev) => [created, ...prev])
       }
@@ -505,11 +520,11 @@ export default function App() {
         }
         showToast(t.syncSuccess(data.updatedCount || 0, data.updatedStoreCount))
       } else {
-        showToast(data.message || t.syncNoKey)
+        showToast(data.message || t.syncNoKey, "error")
       }
     } catch (e) {
       console.error("Sync error:", e)
-      showToast(t.syncNoKey)
+      showToast(t.syncNoKey, "error")
     } finally {
       setSyncing(false)
     }
@@ -518,11 +533,19 @@ export default function App() {
   return (
     <div className="min-h-full">
       {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-sm border border-lime/50 bg-panel px-4 py-3 shadow-2xl backdrop-blur-md">
-          <span className="text-sm text-lime">✦</span>
-          <span className="font-mono text-xs font-medium text-fg">{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="ml-2 font-mono text-xs text-muted hover:text-fg">✕</button>
+      {toastInfo && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-sm px-4 py-3 shadow-2xl backdrop-blur-md ${
+          toastInfo.type === "error"
+            ? "border border-flame/70 bg-[#160c0c] text-flame shadow-flame/10"
+            : "border border-lime/50 bg-panel text-fg"
+        }`}>
+          <span className={`text-sm ${toastInfo.type === "error" ? "text-flame font-bold" : "text-lime"}`}>
+            {toastInfo.type === "error" ? "✕" : "✦"}
+          </span>
+          <span className={`font-mono text-xs font-semibold ${toastInfo.type === "error" ? "text-flame" : "text-fg"}`}>
+            {toastInfo.message}
+          </span>
+          <button onClick={() => setToastInfo(null)} className="ml-2 font-mono text-xs text-muted hover:text-fg">✕</button>
         </div>
       )}
 
@@ -1095,11 +1118,12 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
 
 /* ── ReviewLine ─────────────────────────────────────────────────── */
 function ReviewLine({ review, label, t }: { review: Review; label: string; t: Translations }) {
-  const color = sentimentColor[review.sentiment]
-  const sentimentText = t.sentiments[review.sentiment]
+  if (!review || !review.count) return null
+  const color = sentimentColor[review.sentiment] || "text-lime"
+  const sentimentText = t.sentiments[review.sentiment] || review.sentiment
   const count = review.count >= 1000
-    ? `(${(review.count / 1000).toFixed(0)}k)`
-    : `(${review.count})`
+    ? `(${(review.count / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}k)`
+    : `(${review.count.toLocaleString()})`
   return (
     <div className="flex items-baseline gap-3">
       <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{label}</span>
@@ -1229,14 +1253,6 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
 
           {/* Store Info Table */}
           <div className="mx-5 mt-5 space-y-2 border-t border-line pt-4">
-            {game.reviewRecent && (
-              <ReviewLine review={game.reviewRecent} label={t.detailReviewRecent} t={t} />
-            )}
-            {game.reviewAll && (
-              <ReviewLine review={game.reviewAll} label={t.detailReviewAll} t={t} />
-            )}
-            <div className="pt-1" />
-
             {/* Ownership Status */}
             <div className="flex items-center gap-3">
               <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailOwnership}</span>
@@ -1290,6 +1306,12 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
               <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailPublisher}</span>
               <span className="font-mono text-[11px] text-lime/90">{game.publisher ?? game.studio}</span>
             </div>
+            {game.reviewRecent && (
+              <ReviewLine review={game.reviewRecent} label={t.detailReviewRecent} t={t} />
+            )}
+            {game.reviewAll && (
+              <ReviewLine review={game.reviewAll} label={t.detailReviewAll} t={t} />
+            )}
             {game.addedAt && (
               <div className="flex items-baseline gap-3">
                 <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailAddedAt}</span>
