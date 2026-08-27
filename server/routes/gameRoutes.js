@@ -6,6 +6,7 @@ import {
   deleteGame,
   searchGames,
   syncPlaytime,
+  getSteamStats,
 } from "../controllers/gameController.js";
 
 const router = Router();
@@ -15,6 +16,7 @@ router.post("/games", addGame);
 router.put("/games/:id", updateGame);
 router.delete("/games/:id", deleteGame);
 router.post("/games/sync-playtime", syncPlaytime);
+router.get("/steam/stats", getSteamStats);
 router.get("/search", searchGames);
 
 export default router;

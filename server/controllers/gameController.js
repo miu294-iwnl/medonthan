@@ -1,6 +1,6 @@
 import prisma from "../lib/prisma.js";
 import dotenv from "dotenv";
-import { searchSteam, getSteamGameDetails, getSteamOwnedGamesMap } from "../services/steamService.js";
+import { searchSteam, getSteamGameDetails, getSteamOwnedGamesData, getSteamAccountStats } from "../services/steamService.js";
 import { searchXbox, getXboxGameDetails } from "../services/xboxService.js";
 
 // Always get fresh environment variables in case .env was modified while running
@@ -288,7 +288,34 @@ export async function deleteGame(req, res) {
 }
 
 /**
- * POST /api/games/sync-playtime - Sync playtime and ownership for all Steam games against account
+ * GET /api/steam/stats - Get overall Steam account stats (total playtime across all games, games count)
+ */
+export async function getSteamStats(req, res) {
+  try {
+    const { apiKey, vanityUrl } = getEnvConfig();
+    if (!apiKey) {
+      return res.json({
+        totalPlaytimeHours: 0,
+        totalPlaytimeMinutes: 0,
+        totalGames: 0,
+        configured: false,
+      });
+    }
+
+    const stats = await getSteamAccountStats(vanityUrl, apiKey);
+    res.json({
+      ...stats,
+      vanityUrl,
+      configured: true,
+    });
+  } catch (error) {
+    console.error("getSteamStats error:", error);
+    res.status(500).json({ error: "Failed to fetch Steam stats" });
+  }
+}
+
+/**
+ * POST /api/games/sync-playtime - Sync playtime, ownership, and Steam store metadata for all added games
  */
 export async function syncPlaytime(req, res) {
   try {
@@ -297,11 +324,15 @@ export async function syncPlaytime(req, res) {
     if (!apiKey) {
       return res.status(400).json({
         error: "STEAM_API_KEY is not configured in server/.env",
-        message: "Vui lòng cấu hình STEAM_API_KEY trong file server/.env để đồng bộ giờ chơi.",
+        message: "Vui lòng cấu hình STEAM_API_KEY trong file server/.env để đồng bộ dữ liệu Steam.",
       });
     }
 
-    const ownedMap = await getSteamOwnedGamesMap(vanityUrl, apiKey);
+    // 1. Fetch user Steam account data (playtime map, account totals)
+    const steamData = await getSteamOwnedGamesData(vanityUrl, apiKey, true);
+    const ownedMap = steamData.playtimeMap;
+
+    // 2. Fetch all Steam games in the database
     const steamGames = await prisma.game.findMany({
       where: {
         OR: [
@@ -311,13 +342,34 @@ export async function syncPlaytime(req, res) {
       },
     });
 
+    // 3. Fetch latest Steam store details in parallel for all games with numeric storeId
+    const storeDetailsMap = new Map();
+    const storeFetchPromises = steamGames
+      .filter((g) => g.storeId && /^\d+$/.test(g.storeId))
+      .map(async (g) => {
+        try {
+          const details = await getSteamGameDetails(g.storeId);
+          if (details) {
+            storeDetailsMap.set(String(g.storeId), details);
+          }
+        } catch (err) {
+          console.warn(`Could not sync store details for app ${g.storeId}:`, err.message);
+        }
+      });
+
+    await Promise.allSettled(storeFetchPromises);
+
+    // 4. Update each game with both Playtime & Store details
     let updatedCount = 0;
+    let updatedStoreCount = 0;
+
     for (const g of steamGames) {
       if (g.storeId) {
+        const updateData = {};
         const hours = ownedMap.get(String(g.storeId)) || 0;
         const isOwned = ownedMap.has(String(g.storeId)) || hours > 0;
-        const updateData = {};
 
+        // Playtime & ownership
         if (g.hoursPlayed !== hours) {
           updateData.hoursPlayed = hours;
         }
@@ -328,6 +380,96 @@ export async function syncPlaytime(req, res) {
         if ((!g.hours || g.hours === 0) && hours > 0 && g.status === "backlog") {
           updateData.status = "playing";
         }
+
+        // Store metadata
+        const storeDetails = storeDetailsMap.get(String(g.storeId));
+        if (storeDetails) {
+          let storeChanged = false;
+
+          if (storeDetails.price !== undefined && storeDetails.price !== g.price) {
+            updateData.price = storeDetails.price;
+            storeChanged = true;
+          }
+          if (storeDetails.originalPrice !== undefined && storeDetails.originalPrice !== g.originalPrice) {
+            updateData.originalPrice = storeDetails.originalPrice;
+            storeChanged = true;
+          }
+          if (storeDetails.discountPercent !== undefined && storeDetails.discountPercent !== g.discountPercent) {
+            updateData.discountPercent = storeDetails.discountPercent;
+            storeChanged = true;
+          }
+          if (storeDetails.releaseDate && storeDetails.releaseDate !== g.releaseDate) {
+            updateData.releaseDate = storeDetails.releaseDate;
+            storeChanged = true;
+          }
+          if (storeDetails.releaseDateEn && storeDetails.releaseDateEn !== g.releaseDateEn) {
+            updateData.releaseDateEn = storeDetails.releaseDateEn;
+            storeChanged = true;
+          }
+          if (storeDetails.year && storeDetails.year !== g.year) {
+            updateData.year = storeDetails.year;
+            storeChanged = true;
+          }
+          if (storeDetails.genre && storeDetails.genre !== g.genre) {
+            updateData.genre = storeDetails.genre;
+            storeChanged = true;
+          }
+          if (storeDetails.genreEn && storeDetails.genreEn !== g.genreEn) {
+            updateData.genreEn = storeDetails.genreEn;
+            storeChanged = true;
+          }
+          if (storeDetails.studio && storeDetails.studio !== "Unknown Studio" && storeDetails.studio !== g.studio) {
+            updateData.studio = storeDetails.studio;
+            storeChanged = true;
+          }
+          if (storeDetails.publisher && storeDetails.publisher !== "Unknown Publisher" && storeDetails.publisher !== g.publisher) {
+            updateData.publisher = storeDetails.publisher;
+            storeChanged = true;
+          }
+          if (storeDetails.isEarlyAccess !== undefined && Boolean(storeDetails.isEarlyAccess) !== Boolean(g.isEarlyAccess)) {
+            updateData.isEarlyAccess = Boolean(storeDetails.isEarlyAccess);
+            storeChanged = true;
+          }
+          if (storeDetails.tags && storeDetails.tags.length > 0) {
+            const tagsStr = JSON.stringify(storeDetails.tags);
+            if (tagsStr !== g.tags) {
+              updateData.tags = tagsStr;
+              storeChanged = true;
+            }
+          }
+          if (storeDetails.tagsEn && storeDetails.tagsEn.length > 0) {
+            const tagsEnStr = JSON.stringify(storeDetails.tagsEn);
+            if (tagsEnStr !== g.tagsEn) {
+              updateData.tagsEn = tagsEnStr;
+              storeChanged = true;
+            }
+          }
+          if (storeDetails.screenshots && storeDetails.screenshots.length > 0 && (!g.screenshots || g.screenshots === "[]")) {
+            updateData.screenshots = JSON.stringify(storeDetails.screenshots);
+            storeChanged = true;
+          }
+          if (storeDetails.videos && storeDetails.videos.length > 0 && (!g.videos || g.videos === "[]")) {
+            updateData.videos = JSON.stringify(storeDetails.videos);
+            storeChanged = true;
+          }
+          if (storeDetails.description && (!g.description || g.description.length < 50)) {
+            updateData.description = storeDetails.description;
+            storeChanged = true;
+          }
+          if (storeDetails.descriptionEn && (!g.descriptionEn || g.descriptionEn.length < 50)) {
+            updateData.descriptionEn = storeDetails.descriptionEn;
+            storeChanged = true;
+          }
+          if (storeDetails.cover && (!g.cover || g.cover.includes("unsplash"))) {
+            updateData.cover = storeDetails.cover;
+            storeChanged = true;
+          }
+
+          if (storeChanged) {
+            updatedStoreCount++;
+          }
+        }
+
         if (Object.keys(updateData).length > 0) {
           await prisma.game.update({
             where: { id: g.id },
@@ -342,11 +484,15 @@ export async function syncPlaytime(req, res) {
     res.json({
       success: true,
       updatedCount,
-      totalSteamGames: steamGames.length,
+      updatedStoreCount,
+      totalSteamGames: steamData.totalGames || steamGames.length,
+      totalSteamPlaytimeHours: steamData.totalPlaytimeHours || 0,
+      totalSteamPlaytimeMinutes: steamData.totalPlaytimeMinutes || 0,
       games: allGames.map(formatGame),
     });
   } catch (error) {
     console.error("syncPlaytime error:", error);
-    res.status(500).json({ error: "Failed to sync playtime from Steam" });
+    res.status(500).json({ error: "Failed to sync data from Steam" });
   }
 }
+

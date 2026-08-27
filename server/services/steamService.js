@@ -241,19 +241,40 @@ export async function resolveSteamVanityUrl(vanityUrl, apiKey) {
   return null;
 }
 
+let cachedOwnedGamesData = null;
+let lastOwnedGamesFetch = 0;
+const CACHE_TTL = 30 * 1000; // 30 seconds
+
 /**
- * Fetch all owned games playtime map { appId -> hoursPlayed } for a user
+ * Fetch all owned games and calculate account stats (total playtime, count, playtime map)
  */
-export async function getSteamOwnedGamesMap(vanityOrSteamId, apiKey) {
+export async function getSteamOwnedGamesData(vanityOrSteamId, apiKey, forceFresh = false) {
   if (!apiKey || !vanityOrSteamId) {
-    return new Map();
+    return {
+      playtimeMap: new Map(),
+      totalPlaytimeHours: 0,
+      totalPlaytimeMinutes: 0,
+      totalGames: 0,
+      steamId: null,
+    };
+  }
+
+  const now = Date.now();
+  if (!forceFresh && cachedOwnedGamesData && now - lastOwnedGamesFetch < CACHE_TTL) {
+    return cachedOwnedGamesData;
   }
 
   try {
     const steamId = await resolveSteamVanityUrl(vanityOrSteamId, apiKey);
     if (!steamId) {
       console.warn("Could not resolve Steam ID for user:", vanityOrSteamId);
-      return new Map();
+      return {
+        playtimeMap: new Map(),
+        totalPlaytimeHours: 0,
+        totalPlaytimeMinutes: 0,
+        totalGames: 0,
+        steamId: null,
+      };
     }
 
     const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&include_appinfo=1&include_played_free_games=1`;
@@ -261,15 +282,57 @@ export async function getSteamOwnedGamesMap(vanityOrSteamId, apiKey) {
     const games = res.data?.response?.games || [];
 
     const playtimeMap = new Map();
+    let totalMinutes = 0;
     for (const g of games) {
       const minutes = g.playtime_forever || 0;
+      totalMinutes += minutes;
       const hours = minutes > 0 ? Math.round((minutes / 60) * 10) / 10 : 0;
       playtimeMap.set(String(g.appid), Math.round(hours));
     }
 
-    return playtimeMap;
+    const totalPlaytimeHours = Math.round(totalMinutes / 60);
+
+    const result = {
+      playtimeMap,
+      totalPlaytimeHours,
+      totalPlaytimeMinutes: totalMinutes,
+      totalGames: games.length,
+      steamId,
+    };
+
+    cachedOwnedGamesData = result;
+    lastOwnedGamesFetch = now;
+    return result;
   } catch (err) {
     console.error("GetOwnedGames error:", err.message);
-    return new Map();
+    return {
+      playtimeMap: new Map(),
+      totalPlaytimeHours: 0,
+      totalPlaytimeMinutes: 0,
+      totalGames: 0,
+      steamId: null,
+    };
   }
 }
+
+/**
+ * Fetch all owned games playtime map { appId -> hoursPlayed } for a user
+ */
+export async function getSteamOwnedGamesMap(vanityOrSteamId, apiKey, forceFresh = false) {
+  const data = await getSteamOwnedGamesData(vanityOrSteamId, apiKey, forceFresh);
+  return data.playtimeMap;
+}
+
+/**
+ * Fetch overall account stats (total hours played across all Steam games, game count)
+ */
+export async function getSteamAccountStats(vanityOrSteamId, apiKey, forceFresh = false) {
+  const data = await getSteamOwnedGamesData(vanityOrSteamId, apiKey, forceFresh);
+  return {
+    totalPlaytimeHours: data.totalPlaytimeHours,
+    totalPlaytimeMinutes: data.totalPlaytimeMinutes,
+    totalGames: data.totalGames,
+    steamId: data.steamId,
+  };
+}
+

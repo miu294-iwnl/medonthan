@@ -5,7 +5,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><!-- figma:title --></title>
-    <!-- figma:head-end -->
+    <script>
+      (function() {
+        function blockAccess() {
+          try {
+            document.documentElement.innerHTML = '';
+          } catch(e){}
+          window.location.replace('/nodevtools.html');
+        }
+
+        // Disable Context Menu (Right-Click Inspect)
+        document.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          return false;
+        }, true);
+
+        // Block DevTools & View Source Keyboard Shortcuts
+        window.addEventListener('keydown', function(e) {
+          if (
+            e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+            (e.metaKey && e.altKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+            (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's')) ||
+            (e.metaKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            blockAccess();
+            return false;
+          }
+        }, true);
+
+        // Debugger Timing Trap
+        setInterval(function() {
+          var t0 = performance.now();
+          debugger;
+          var t1 = performance.now();
+          if (t1 - t0 > 80) {
+            blockAccess();
+          }
+        }, 120);
+      })();
+    </script>
   </head>
   <body>
     <!-- figma:body-start -->

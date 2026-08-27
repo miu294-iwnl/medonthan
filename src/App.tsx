@@ -104,9 +104,9 @@ const T = {
     detailToggleOwned: "Click to toggle ownership",
     saleLabel: (pct: number) => `(sale ${pct}%)`,
     freeLabel: "FREE",
-    syncBtn: "SYNC STEAM PLAYTIME",
+    syncBtn: "SYNC PLAYTIME & STORE",
     syncingBtn: "SYNCING...",
-    syncSuccess: (n: number) => `Synced ${n} Steam game(s)`,
+    syncSuccess: (n: number, storeN?: number) => storeN ? `Synced ${n} playtime(s) & ${storeN} store details` : `Synced ${n} Steam game(s)`,
     syncNoKey: "Please add STEAM_API_KEY to server/.env",
     seeMore: "SEE MORE ↓",
     seeLess: "SHOW LESS ↑",
@@ -144,7 +144,7 @@ const T = {
     heroTitle3: "sắp tới.",
     heroDesc: "Theo dõi các game đang để mắt, đánh dấu thứ quan trọng và lấy cái tiếp theo ra khi sẵn sàng. Nhấn vào thẻ để xem chi tiết.",
     all: "Tất cả",
-    statuses: { backlog: "Tồn đọng", next: "Sắp chơi", playing: "Đang chơi", beaten: "Đã xong" },
+    statuses: { backlog: "Chưa chơi", next: "Sắp chơi", playing: "Đang chơi", beaten: "Đã xong" },
     priorities: { low: "THẤP", medium: "VỪA", high: "CAO" },
     searchPlaceholder: "Tìm tên game, studio, thể loại…",
     addGame: "+ THÊM GAME",
@@ -183,9 +183,9 @@ const T = {
     detailToggleOwned: "Nhấn để chuyển đổi trạng thái sở hữu",
     saleLabel: (pct: number) => `(sale ${pct}%)`,
     freeLabel: "MIỄN PHÍ",
-    syncBtn: "ĐỒNG BỘ GIỜ CHƠI STEAM",
+    syncBtn: "ĐỒNG BỘ GIỜ CHƠI & CỬA HÀNG",
     syncingBtn: "ĐANG ĐỒNG BỘ...",
-    syncSuccess: (n: number) => `Đã cập nhật ${n} game từ Steam`,
+    syncSuccess: (n: number, storeN?: number) => storeN ? `Đã đồng bộ giờ chơi và thông tin ${storeN} game từ Steam` : `Đã đồng bộ dữ liệu ${n} game từ Steam`,
     syncNoKey: "Chưa cấu hình STEAM_API_KEY trong file server/.env",
     seeMore: "XEM THÊM ↓",
     seeLess: "THU GỌN ↑",
@@ -280,6 +280,7 @@ const LANG_KEY = "game-wishlist-lang"
 export default function App() {
   const [games, setGames] = useState<Game[]>([])
   const [loadingGames, setLoadingGames] = useState(true)
+  const [steamTotalHours, setSteamTotalHours] = useState<number | null>(null)
   const [filter, setFilter] = useState<Status | "all">("all")
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
@@ -298,6 +299,21 @@ export default function App() {
   const t = T[lang]
 
   useEffect(() => { try { localStorage.setItem(LANG_KEY, lang) } catch {} }, [lang])
+
+  // Fetch Steam account statistics (total playtime of all games on Steam)
+  const fetchSteamStats = async () => {
+    try {
+      const res = await fetch("/api/steam/stats")
+      if (res.ok) {
+        const data = await res.json()
+        if (typeof data.totalPlaytimeHours === "number" && data.configured) {
+          setSteamTotalHours(data.totalPlaytimeHours)
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load Steam stats:", e)
+    }
+  }
 
   // Fetch games from backend SQLite API
   const fetchGames = async () => {
@@ -331,6 +347,7 @@ export default function App() {
 
   useEffect(() => {
     fetchGames()
+    fetchSteamStats()
   }, [])
 
   // Handle browser back/forward buttons
@@ -400,6 +417,8 @@ export default function App() {
     () => games.reduce((sum, g) => sum + (g.hoursPlayed || 0), 0),
     [games],
   )
+
+  const displayTotalHours = steamTotalHours !== null ? steamTotalHours : totalHoursPlayed
 
   const selectedGame = useMemo(() => games.find((g) => g.id === selectedId) ?? null, [games, selectedId])
 
@@ -479,7 +498,12 @@ export default function App() {
       const data = await res.json()
       if (res.ok) {
         setGames(data.games)
-        showToast(t.syncSuccess(data.updatedCount || 0))
+        if (typeof data.totalSteamPlaytimeHours === "number") {
+          setSteamTotalHours(data.totalSteamPlaytimeHours)
+        } else {
+          fetchSteamStats()
+        }
+        showToast(t.syncSuccess(data.updatedCount || 0, data.updatedStoreCount))
       } else {
         showToast(data.message || t.syncNoKey)
       }
@@ -518,7 +542,7 @@ export default function App() {
             <div className="hidden items-center gap-6 font-mono text-[11px] tracking-[0.18em] text-muted sm:flex">
               <span>{t.titles(games.length)}</span>
               <span className="text-line">/</span>
-              <span>{totalHoursPlayed}<span className="text-lime">H</span> {t.played}</span>
+              <span>{displayTotalHours}<span className="text-lime">H</span> {t.played}</span>
             </div>
 
             {/* Sync Steam playtime button */}

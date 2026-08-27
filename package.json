@@ -8,10 +8,13 @@
     "server": "node server/index.js",
     "server:dev": "node server/index.js",
     "build": "vite build",
+    "build:all": "npm run build && cd server && npm install && npx prisma db push && npx prisma generate",
+    "start": "node server/index.js",
     "preview": "vite preview",
     "format": "oxfmt"
   },
   "dependencies": {
+    "devtools-detector": "^2.0.25",
     "hls.js": "^1.7.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
