@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Hls from "hls.js"
 import steamIconSvg from "./imports/Steam_icon_logo.svg"
 import xboxLogoSvg from "./imports/Xbox_Logo.svg"
+import MusicPlayer from "./components/MusicPlayer"
 
 type Status = "backlog" | "next" | "playing" | "beaten"
 type Priority = "low" | "medium" | "high"
@@ -651,6 +652,9 @@ export default function App() {
             ))}
           </div>
         )}
+
+        {/* Background Music Player (Docked below game list on mobile, floating on desktop) */}
+        <MusicPlayer lang={lang} />
       </main>
 
       {selectedGame && (
@@ -1032,41 +1036,168 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
   }, [cover, screenshots, videos])
 
   const [idx, setIdx] = useState(0)
+  const [dragOffset, setDragOffset] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const startX = useRef<number | null>(null)
+  const startY = useRef<number | null>(null)
+  const isHorizontalSwipe = useRef<boolean | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  // Reset index when media list changes
+  useEffect(() => {
+    setIdx(0)
+    setDragOffset(0)
+    setIsDragging(false)
+  }, [allMedia])
+
+  // Touch handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX
+    startY.current = e.touches[0].clientY
+    isHorizontalSwipe.current = null
+    setIsDragging(true)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (startX.current === null || startY.current === null) return
+    const currentX = e.touches[0].clientX
+    const currentY = e.touches[0].clientY
+    const deltaX = currentX - startX.current
+    const deltaY = currentY - startY.current
+
+    if (isHorizontalSwipe.current === null) {
+      if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
+        isHorizontalSwipe.current = Math.abs(deltaX) > Math.abs(deltaY)
+      }
+    }
+
+    if (isHorizontalSwipe.current) {
+      // Apply rubber-band effect at boundaries
+      let offset = deltaX
+      if ((idx === 0 && deltaX > 0) || (idx === allMedia.length - 1 && deltaX < 0)) {
+        offset = deltaX * 0.3
+      }
+      setDragOffset(offset)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (isHorizontalSwipe.current) {
+      const containerWidth = containerRef.current?.offsetWidth || 320
+      const threshold = Math.min(60, containerWidth * 0.18)
+
+      if (dragOffset < -threshold && idx < allMedia.length - 1) {
+        setIdx((i) => i + 1)
+      } else if (dragOffset > threshold && idx > 0) {
+        setIdx((i) => i - 1)
+      }
+    }
+
+    startX.current = null
+    startY.current = null
+    isHorizontalSwipe.current = null
+    setIsDragging(false)
+    setDragOffset(0)
+  }
+
+  // Pointer / Mouse drag handlers for desktop
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return // already handled by touch events
+    startX.current = e.clientX
+    startY.current = e.clientY
+    isHorizontalSwipe.current = true
+    setIsDragging(true)
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return
+    if (!isDragging || startX.current === null) return
+    const deltaX = e.clientX - startX.current
+    let offset = deltaX
+    if ((idx === 0 && deltaX > 0) || (idx === allMedia.length - 1 && deltaX < 0)) {
+      offset = deltaX * 0.3
+    }
+    setDragOffset(offset)
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return
+    if (!isDragging) return
+    const containerWidth = containerRef.current?.offsetWidth || 320
+    const threshold = Math.min(60, containerWidth * 0.18)
+
+    if (dragOffset < -threshold && idx < allMedia.length - 1) {
+      setIdx((i) => i + 1)
+    } else if (dragOffset > threshold && idx > 0) {
+      setIdx((i) => i - 1)
+    }
+
+    startX.current = null
+    startY.current = null
+    isHorizontalSwipe.current = null
+    setIsDragging(false)
+    setDragOffset(0)
+  }
 
   const prev = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setIdx((i) => (i - 1 + allMedia.length) % allMedia.length)
+    setIdx((i) => Math.max(0, i - 1))
   }
   const next = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setIdx((i) => (i + 1) % allMedia.length)
+    setIdx((i) => Math.min(allMedia.length - 1, i + 1))
   }
 
-  const current = allMedia[idx] || allMedia[0]
-
   return (
-    <div className="group/gal relative aspect-video overflow-hidden bg-panel-2">
-      {current.type === "video" ? (
-        <VideoPlayer key={current.url} src={current.url} poster={current.thumbnail} />
-      ) : (
-        <img
-          key={current.url}
-          src={current.url}
-          alt=""
-          className="size-full object-cover transition-opacity duration-300"
-        />
-      )}
-
-      {current.type === "video" && (
-        <div className="absolute left-3 top-3 rounded-sm bg-flame px-2 py-0.5 font-mono text-[9px] font-bold tracking-[0.14em] text-white shadow">
-          ▶ TRAILER
-        </div>
-      )}
+    <div
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      className={`group/gal relative aspect-video select-none overflow-hidden bg-panel-2 touch-pan-y ${
+        isDragging ? "cursor-grabbing" : "cursor-grab"
+      }`}
+    >
+      {/* Horizontal Carousel Track - Real-time follow */}
+      <div
+        className="flex h-full w-full"
+        style={{
+          transform: `translateX(calc(-${idx * 100}% + ${dragOffset}px))`,
+          transition: isDragging ? "none" : "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
+        {allMedia.map((m, i) => (
+          <div key={i} className="relative h-full w-full shrink-0 flex-[0_0_100%] overflow-hidden bg-panel-2">
+            {m.type === "video" ? (
+              <VideoPlayer src={m.url} poster={m.thumbnail} />
+            ) : (
+              <img
+                src={m.url}
+                alt=""
+                draggable={false}
+                className="size-full select-none object-cover pointer-events-none"
+              />
+            )}
+            {m.type === "video" && (
+              <div className="absolute left-3 top-3 rounded-sm bg-flame px-2 py-0.5 font-mono text-[9px] font-bold tracking-[0.14em] text-white shadow pointer-events-none">
+                ▶ TRAILER
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
 
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-panel/60 to-transparent" />
 
       {/* Prev */}
-      {allMedia.length > 1 && (
+      {allMedia.length > 1 && idx > 0 && (
         <button
           onClick={prev}
           className="absolute left-2 top-1/2 -translate-y-1/2 grid size-8 place-items-center rounded-sm border border-line bg-ink/70 text-muted opacity-0 backdrop-blur transition hover:border-lime/50 hover:text-lime group-hover/gal:opacity-100"
@@ -1078,7 +1209,7 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
       )}
 
       {/* Next */}
-      {allMedia.length > 1 && (
+      {allMedia.length > 1 && idx < allMedia.length - 1 && (
         <button
           onClick={next}
           className="absolute right-2 top-1/2 -translate-y-1/2 grid size-8 place-items-center rounded-sm border border-line bg-ink/70 text-muted opacity-0 backdrop-blur transition hover:border-lime/50 hover:text-lime group-hover/gal:opacity-100"
