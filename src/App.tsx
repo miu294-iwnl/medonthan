@@ -50,6 +50,7 @@ export interface Game {
   hoursPlayed?: number
   isOwned?: boolean
   isEarlyAccess?: boolean
+  isUnreleased?: boolean
   lndLink?: string
   storeId?: string
   storeType?: string
@@ -104,6 +105,7 @@ const T = {
     unownedLabel: "NOT OWNED",
     detailToggleOwned: "Click to toggle ownership",
     saleLabel: (pct: number) => `(sale ${pct}%)`,
+    unreleasedLabel: "COMING SOON",
     freeLabel: "FREE",
     syncBtn: "SYNC PLAYTIME & STORE",
     syncingBtn: "SYNCING...",
@@ -184,6 +186,7 @@ const T = {
     unownedLabel: "CHƯA SỞ HỮU",
     detailToggleOwned: "Nhấn để chuyển đổi trạng thái sở hữu",
     saleLabel: (pct: number) => `(sale ${pct}%)`,
+    unreleasedLabel: "CHƯA RA MẮT",
     freeLabel: "MIỄN PHÍ",
     syncBtn: "ĐỒNG BỘ GIỜ CHƠI & CỬA HÀNG",
     syncingBtn: "ĐANG ĐỒNG BỘ...",
@@ -248,6 +251,126 @@ const fmtVnd = (price: number, freeLabel: string) =>
   price === 0
     ? freeLabel
     : price.toLocaleString("vi-VN") + "₫"
+
+function parseGameDate(str?: string): Date | "unreleased" | "tba" | null {
+  if (!str || typeof str !== "string") return null
+  const s = str.trim()
+  if (!s) return null
+
+  const lower = s.toLowerCase()
+  if (/sắp ra mắt|chưa ra mắt|chưa phát hành|coming soon|to be announced|wishlist now|not yet released/i.test(lower)) {
+    return "unreleased"
+  }
+  if (/^(tba|tbd)$/i.test(lower)) {
+    return "tba"
+  }
+
+  // Check simple 4-digit year (e.g. '2027', '2028')
+  if (/^\d{4}$/.test(s)) {
+    const yr = parseInt(s, 10)
+    return new Date(yr, 11, 31, 23, 59, 59)
+  }
+
+  // Check 'Q1 2027', 'Q2 2027', 'Q3 2026', 'Q4 2026'
+  const qMatch = s.match(/q([1-4])\s+(\d{4})/i)
+  if (qMatch) {
+    const q = parseInt(qMatch[1], 10)
+    const yr = parseInt(qMatch[2], 10)
+    const month = q * 3 - 1
+    return new Date(yr, month, 28)
+  }
+
+  // Check Vietnamese month-year like 'Tháng 12 2026', 'Tháng 4 2027', 'Thg12 2026'
+  const vnMonthYearMatch = s.match(/(?:tháng|thg)\s*(\d{1,2})[,\s]+(\d{4})/i)
+  if (vnMonthYearMatch) {
+    const month = parseInt(vnMonthYearMatch[1], 10) - 1
+    const yr = parseInt(vnMonthYearMatch[2], 10)
+    return new Date(yr, month + 1, 0, 23, 59, 59)
+  }
+
+  // Check Vietnamese day-month-year: '30 Thg11, 2022', '18 thg 4, 2023', '21 Thg08, 2012'
+  const vnDayMonthYearMatch = s.match(/(\d{1,2})\s+(?:tháng|thg)\s*(\d{1,2})[,\s]+(\d{4})/i)
+  if (vnDayMonthYearMatch) {
+    const day = parseInt(vnDayMonthYearMatch[1], 10)
+    const month = parseInt(vnDayMonthYearMatch[2], 10) - 1
+    const yr = parseInt(vnDayMonthYearMatch[3], 10)
+    return new Date(yr, month, day, 23, 59, 59)
+  }
+
+  const parsed = Date.parse(s)
+  if (!isNaN(parsed)) {
+    return new Date(parsed)
+  }
+
+  return null
+}
+
+export function isGameUnreleased(game?: {
+  releaseDate?: string
+  releaseDateEn?: string
+  isUnreleased?: boolean
+  year?: number
+  price?: number
+} | null): boolean {
+  if (!game) return false
+  if (game.isUnreleased) return true
+
+  const now = new Date()
+  const dateCandidates = [game.releaseDate, game.releaseDateEn].filter(Boolean) as string[]
+  let hasValidPastDate = false
+  let hasUnreleasedOrFuture = false
+
+  for (const dateStr of dateCandidates) {
+    const res = parseGameDate(dateStr)
+    if (res === "unreleased" || res === "tba") {
+      hasUnreleasedOrFuture = true
+    } else if (res instanceof Date) {
+      if (res.getTime() > now.getTime()) {
+        hasUnreleasedOrFuture = true
+      } else {
+        hasValidPastDate = true
+      }
+    }
+  }
+
+  if (hasValidPastDate) return false
+  if (hasUnreleasedOrFuture) return true
+
+  if (game.year && game.year > now.getFullYear()) {
+    return true
+  }
+
+  return false
+}
+
+const getGamePriceLabel = (
+  game: { price?: number; releaseDate?: string; releaseDateEn?: string; isUnreleased?: boolean; year?: number },
+  t: (typeof T)["en" | "vi"]
+) => {
+  const unreleased = isGameUnreleased(game)
+  if (unreleased && (game.price === 0 || game.price == null)) {
+    return {
+      text: t.unreleasedLabel,
+      isUnreleased: true,
+      isFree: false,
+      colorClass: "text-ice",
+    }
+  }
+  if (game.price === 0) {
+    return {
+      text: t.freeLabel,
+      isUnreleased: false,
+      isFree: true,
+      colorClass: "text-lime",
+    }
+  }
+  return {
+    text: fmtVnd(game.price ?? 0, t.freeLabel),
+    isUnreleased: false,
+    isFree: false,
+    colorClass: "text-fg/80",
+  }
+}
 
 function slugify(text: string) {
   return text
@@ -812,18 +935,21 @@ function GameCard({ game, t, lang, selected, onClick, onStatus, onPriority, onRe
       <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="rounded-sm bg-panel-2 px-2 py-1 font-mono text-[10px] tracking-[0.1em] text-muted">{currentGenre}</span>
-          {game.price != null && (
-            <div className="flex items-center gap-1 font-mono text-[10px]">
-              <span className={`font-semibold tracking-[0.06em] ${game.price === 0 ? "text-lime" : "text-fg/80"}`}>
-                {fmtVnd(game.price, t.freeLabel)}
-              </span>
-              {game.discountPercent != null && game.discountPercent > 0 && (
-                <span className="font-bold text-flame">
-                  -{game.discountPercent}%
+          {(game.price != null || isGameUnreleased(game)) && (() => {
+            const priceInfo = getGamePriceLabel(game, t)
+            return (
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                <span className={`font-semibold tracking-[0.06em] ${priceInfo.colorClass}`}>
+                  {priceInfo.text}
                 </span>
-              )}
-            </div>
-          )}
+                {game.discountPercent != null && game.discountPercent > 0 && !priceInfo.isUnreleased && (
+                  <span className="font-bold text-flame">
+                    -{game.discountPercent}%
+                  </span>
+                )}
+              </div>
+            )
+          })()}
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={(e) => { e.stopPropagation(); onPriority() }}
@@ -906,18 +1032,22 @@ function GameRow({ game, t, lang, selected, onClick, onStatus, onPriority, onRem
           <span className="shrink-0">{game.platform}</span>
           <span className="text-line">·</span>
           <span className="shrink-0">{currentGenre}</span>
-          {game.price != null && (
-            <><span className="text-line">·</span>
-            <span className={`shrink-0 font-semibold ${game.price === 0 ? "text-lime" : "text-fg/70"}`}>
-              {fmtVnd(game.price, t.freeLabel)}
-            </span>
-            {game.discountPercent != null && game.discountPercent > 0 && (
-              <span className="shrink-0 font-bold text-flame">
-                {t.saleLabel(game.discountPercent)}
-              </span>
-            )}
-            </>
-          )}
+          {(game.price != null || isGameUnreleased(game)) && (() => {
+            const priceInfo = getGamePriceLabel(game, t)
+            return (
+              <>
+                <span className="text-line">·</span>
+                <span className={`shrink-0 font-semibold ${priceInfo.isUnreleased ? "text-ice" : priceInfo.isFree ? "text-lime" : "text-fg/70"}`}>
+                  {priceInfo.text}
+                </span>
+                {game.discountPercent != null && game.discountPercent > 0 && !priceInfo.isUnreleased && (
+                  <span className="shrink-0 font-bold text-flame">
+                    {t.saleLabel(game.discountPercent)}
+                  </span>
+                )}
+              </>
+            )
+          })()}
           {game.hoursPlayed != null && game.hoursPlayed > 0 && (
             <><span className="text-line">·</span>
             <span className="shrink-0 font-semibold text-ice">▶ {game.hoursPlayed}h</span></>
@@ -1408,26 +1538,29 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
             </div>
 
             {/* Price with sale percentage */}
-            {game.price != null && (
-              <div className="flex items-baseline gap-3">
-                <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailPrice}</span>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className={`font-mono text-[13px] font-semibold ${game.price === 0 ? "text-lime" : "text-fg"}`}>
-                    {fmtVnd(game.price, t.freeLabel)}
-                  </span>
-                  {game.discountPercent != null && game.discountPercent > 0 && (
-                    <span className="font-mono text-[11px] font-bold text-flame">
-                      {t.saleLabel(game.discountPercent)}
+            {(game.price != null || isGameUnreleased(game)) && (() => {
+              const priceInfo = getGamePriceLabel(game, t)
+              return (
+                <div className="flex items-baseline gap-3">
+                  <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailPrice}</span>
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className={`font-mono text-[13px] font-semibold ${priceInfo.isUnreleased ? "text-ice" : priceInfo.isFree ? "text-lime" : "text-fg"}`}>
+                      {priceInfo.text}
                     </span>
-                  )}
-                  {game.originalPrice != null && game.discountPercent != null && game.discountPercent > 0 && (
-                    <span className="font-mono text-[10px] text-muted line-through">
-                      {fmtVnd(game.originalPrice, t.freeLabel)}
-                    </span>
-                  )}
+                    {game.discountPercent != null && game.discountPercent > 0 && !priceInfo.isUnreleased && (
+                      <span className="font-mono text-[11px] font-bold text-flame">
+                        {t.saleLabel(game.discountPercent)}
+                      </span>
+                    )}
+                    {game.originalPrice != null && game.discountPercent != null && game.discountPercent > 0 && !priceInfo.isUnreleased && (
+                      <span className="font-mono text-[10px] text-muted line-through">
+                        {fmtVnd(game.originalPrice, t.freeLabel)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             <div className="flex items-baseline gap-3">
               <span className="w-36 shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted">{t.detailDeveloper}</span>
@@ -1677,6 +1810,7 @@ interface SuggestionItem {
   cover: string
   thumbnail?: string
   price?: number
+  isUnreleased?: boolean
   platform: string
 }
 
@@ -1808,9 +1942,13 @@ function AddModal({ t, onClose, onAdd }: {
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-mono text-[12px] text-fg">{s.name}</div>
-                            {s.price !== undefined && (
+                            {(s.price !== undefined || s.isUnreleased) && (
                               <div className="font-mono text-[10px] text-muted">
-                                {s.price === 0 ? t.freeLabel : fmtVnd(s.price, t.freeLabel)}
+                                {s.isUnreleased || s.price == null
+                                  ? t.unreleasedLabel
+                                  : s.price === 0
+                                    ? t.freeLabel
+                                    : fmtVnd(s.price, t.freeLabel)}
                               </div>
                             )}
                           </div>

@@ -25,6 +25,7 @@ export async function searchSteam(query) {
 
     return items.map((item) => {
       const appId = String(item.id);
+      const hasPrice = item.price && typeof item.price.final === "number";
       return {
         id: appId,
         storeId: appId,
@@ -33,7 +34,7 @@ export async function searchSteam(query) {
         // High quality vertical poster or capsule header fallback
         cover: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
         thumbnail: item.tiny_image || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-        price: item.price ? Math.round(item.price.final / 100) : 0,
+        price: hasPrice ? Math.round(item.price.final / 100) : undefined,
         platform: "Steam",
       };
     });
@@ -235,6 +236,15 @@ export async function getSteamGameDetails(appId) {
       }
     }
 
+    // Check if game is unreleased / coming soon
+    const isComingSoon = Boolean(data.release_date?.coming_soon);
+    const isUnreleased =
+      isComingSoon ||
+      releaseDateStr === "TBA" ||
+      releaseDateStr === "TBD" ||
+      /sắp ra mắt|chưa ra mắt|chưa phát hành|coming soon|to be announced|tba|tbd/i.test(releaseDateStr) ||
+      /coming soon|to be announced|tba|tbd|unreleased/i.test(releaseDateEnStr);
+
     return {
       title: data.name,
       studio: data.developers?.[0] || "Unknown Studio",
@@ -259,6 +269,7 @@ export async function getSteamGameDetails(appId) {
       originalPrice,
       discountPercent,
       isEarlyAccess,
+      isUnreleased,
       storeId: String(appId),
       storeType: "steam",
     };

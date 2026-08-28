@@ -12,6 +12,88 @@ function getEnvConfig() {
   };
 }
 
+function parseGameDate(str) {
+  if (!str || typeof str !== "string") return null;
+  const s = str.trim();
+  if (!s) return null;
+
+  const lower = s.toLowerCase();
+  if (/sắp ra mắt|chưa ra mắt|chưa phát hành|coming soon|to be announced|wishlist now|not yet released/i.test(lower)) {
+    return "unreleased";
+  }
+  if (/^(tba|tbd)$/i.test(lower)) {
+    return "tba";
+  }
+
+  if (/^\d{4}$/.test(s)) {
+    const yr = parseInt(s, 10);
+    return new Date(yr, 11, 31, 23, 59, 59);
+  }
+
+  const qMatch = s.match(/q([1-4])\s+(\d{4})/i);
+  if (qMatch) {
+    const q = parseInt(qMatch[1], 10);
+    const yr = parseInt(qMatch[2], 10);
+    const month = q * 3 - 1;
+    return new Date(yr, month, 28);
+  }
+
+  const vnMonthYearMatch = s.match(/(?:tháng|thg)\s*(\d{1,2})[,\s]+(\d{4})/i);
+  if (vnMonthYearMatch) {
+    const month = parseInt(vnMonthYearMatch[1], 10) - 1;
+    const yr = parseInt(vnMonthYearMatch[2], 10);
+    return new Date(yr, month + 1, 0, 23, 59, 59);
+  }
+
+  const vnDayMonthYearMatch = s.match(/(\d{1,2})\s+(?:tháng|thg)\s*(\d{1,2})[,\s]+(\d{4})/i);
+  if (vnDayMonthYearMatch) {
+    const day = parseInt(vnDayMonthYearMatch[1], 10);
+    const month = parseInt(vnDayMonthYearMatch[2], 10) - 1;
+    const yr = parseInt(vnDayMonthYearMatch[3], 10);
+    return new Date(yr, month, day, 23, 59, 59);
+  }
+
+  const parsed = Date.parse(s);
+  if (!isNaN(parsed)) {
+    return new Date(parsed);
+  }
+
+  return null;
+}
+
+function computeIsUnreleased(game) {
+  if (!game) return false;
+
+  const now = new Date();
+  const dateCandidates = [game.releaseDate, game.releaseDateEn].filter(Boolean);
+  let hasValidPastDate = false;
+  let hasUnreleasedOrFuture = false;
+
+  for (const dateStr of dateCandidates) {
+    const res = parseGameDate(dateStr);
+    if (res === "unreleased") {
+      hasUnreleasedOrFuture = true;
+    } else if (res === "tba") {
+      hasUnreleasedOrFuture = true;
+    } else if (res instanceof Date) {
+      if (res.getTime() > now.getTime()) {
+        hasUnreleasedOrFuture = true;
+      } else {
+        hasValidPastDate = true;
+      }
+    }
+  }
+
+  if (hasValidPastDate) return false;
+  if (hasUnreleasedOrFuture) return true;
+
+  if (game.year && game.year > now.getFullYear()) {
+    return true;
+  }
+
+  return false;
+}
+
 // Helper to format DB record into frontend Game object
 function formatGame(game) {
   let parsedTags = [];
@@ -68,6 +150,8 @@ function formatGame(game) {
     } catch {}
   }
 
+  const isUnreleased = computeIsUnreleased(game);
+
   return {
     ...game,
     genreEn: game.genreEn || game.genre || "Action",
@@ -78,6 +162,7 @@ function formatGame(game) {
     status,
     isOwned,
     isEarlyAccess,
+    isUnreleased,
     originalPrice: game.originalPrice || game.price || 0,
     discountPercent: game.discountPercent || 0,
     screenshots: parsedScreenshots,
