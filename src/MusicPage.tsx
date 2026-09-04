@@ -153,14 +153,90 @@ function formatTime(seconds: number) {
   return `${m}:${s < 10 ? "0" : ""}${s}`
 }
 
+export interface PlaylistData {
+  cover: string
+  title: string
+  description: string | null
+  owner: string
+  playlistUrl: string
+  tracks: Track[]
+}
+
+const PLAYLIST_CACHE_KEY = "medonthan_music_playlist_cache"
+let inMemoryPlaylist: PlaylistData | null = null
+
+export function getCachedPlaylist(): PlaylistData | null {
+  if (inMemoryPlaylist) return inMemoryPlaylist
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(PLAYLIST_CACHE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && Array.isArray(parsed.tracks) && parsed.tracks.length > 0) {
+          inMemoryPlaylist = parsed
+          return parsed
+        }
+      }
+    } catch {}
+  }
+  return null
+}
+
+export function setCachedPlaylist(data: PlaylistData) {
+  inMemoryPlaylist = data
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(PLAYLIST_CACHE_KEY, JSON.stringify(data))
+    } catch {}
+  }
+}
+
+let prefetchPromise: Promise<PlaylistData | null> | null = null
+
+export function prefetchMusicPlaylist(): Promise<PlaylistData | null> {
+  if (inMemoryPlaylist) return Promise.resolve(inMemoryPlaylist)
+  if (prefetchPromise) return prefetchPromise
+
+  prefetchPromise = fetch("/api/music/playlist")
+    .then(async (res) => {
+      if (res.ok) {
+        const data = await res.json()
+        if (data.configured && data.tracks && data.tracks.length > 0) {
+          const playlistData: PlaylistData = {
+            cover: data.cover || PLAYLIST_COVER,
+            title: data.title || "PLAYLIST",
+            description: data.description && data.description.trim().length > 0 ? data.description.trim() : null,
+            owner: data.owner || "MEDONTHAN",
+            playlistUrl: data.playlistUrl || "https://open.spotify.com",
+            tracks: data.tracks,
+          }
+          setCachedPlaylist(playlistData)
+          return playlistData
+        }
+      }
+      return null
+    })
+    .catch((err) => {
+      console.warn("Music prefetch failed:", err)
+      return null
+    })
+    .finally(() => {
+      prefetchPromise = null
+    })
+
+  return prefetchPromise
+}
+
 export default function MusicPage({ onBack, exiting }: { onBack?: () => void; exiting?: boolean }) {
-  const [tracks, setTracks] = useState<Track[]>(TRACKS)
-  const [playlistCover, setPlaylistCover] = useState(PLAYLIST_COVER)
-  const [playlistTitle, setPlaylistTitle] = useState("NIGHT DRIVE")
-  const [playlistDesc, setPlaylistDesc] = useState<string | null>("Những bài nhạc để lái xe đêm. Tốc độ vừa phải, ánh đèn đường, và không gian rộng lớn phía trước.")
-  const [playlistOwner, setPlaylistOwner] = useState<string>("MEDONTHAN")
-  const [playlistUrl, setPlaylistUrl] = useState("https://open.spotify.com")
-  const [loadingPlaylist, setLoadingPlaylist] = useState(false)
+  const initialCache = getCachedPlaylist()
+
+  const [tracks, setTracks] = useState<Track[]>(() => initialCache?.tracks ?? [])
+  const [playlistCover, setPlaylistCover] = useState(() => initialCache?.cover ?? PLAYLIST_COVER)
+  const [playlistTitle, setPlaylistTitle] = useState(() => initialCache?.title ?? "")
+  const [playlistDesc, setPlaylistDesc] = useState<string | null>(() => initialCache?.description ?? null)
+  const [playlistOwner, setPlaylistOwner] = useState<string>(() => initialCache?.owner ?? "MEDONTHAN")
+  const [playlistUrl, setPlaylistUrl] = useState(() => initialCache?.playlistUrl ?? "https://open.spotify.com")
+  const [loadingPlaylist, setLoadingPlaylist] = useState(() => !initialCache)
 
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [paused, setPaused] = useState(false)
@@ -179,25 +255,47 @@ export default function MusicPage({ onBack, exiting }: { onBack?: () => void; ex
     let isMounted = true
     const loadPlaylist = async () => {
       try {
-        setLoadingPlaylist(true)
+        if (!initialCache) setLoadingPlaylist(true)
         const res = await fetch("/api/music/playlist")
         if (res.ok) {
           const data = await res.json()
           if (data.configured && data.tracks && data.tracks.length > 0 && isMounted) {
-            if (data.cover) setPlaylistCover(data.cover)
-            if (data.title) setPlaylistTitle(data.title)
-            if (data.description && data.description.trim().length > 0) {
-              setPlaylistDesc(data.description.trim())
-            } else {
-              setPlaylistDesc(null)
+            const freshData: PlaylistData = {
+              cover: data.cover || PLAYLIST_COVER,
+              title: data.title || "PLAYLIST",
+              description: data.description && data.description.trim().length > 0 ? data.description.trim() : null,
+              owner: data.owner || "MEDONTHAN",
+              playlistUrl: data.playlistUrl || "https://open.spotify.com",
+              tracks: data.tracks,
             }
-            if (data.owner) setPlaylistOwner(data.owner)
-            if (data.playlistUrl) setPlaylistUrl(data.playlistUrl)
-            setTracks(data.tracks)
+            setCachedPlaylist(freshData)
+            setPlaylistCover(freshData.cover)
+            setPlaylistTitle(freshData.title)
+            setPlaylistDesc(freshData.description)
+            setPlaylistOwner(freshData.owner)
+            setPlaylistUrl(freshData.playlistUrl)
+            setTracks(freshData.tracks)
+          } else if (isMounted && (!initialCache || tracks.length === 0)) {
+            // Fallback to default tracks only if backend isn't configured and no cache
+            setTracks(TRACKS)
+            setPlaylistCover(PLAYLIST_COVER)
+            setPlaylistTitle("NIGHT DRIVE")
+            setPlaylistDesc("Những bài nhạc để lái xe đêm. Tốc độ vừa phải, ánh đèn đường, và không gian rộng lớn phía trước.")
           }
+        } else if (isMounted && (!initialCache || tracks.length === 0)) {
+          setTracks(TRACKS)
+          setPlaylistCover(PLAYLIST_COVER)
+          setPlaylistTitle("NIGHT DRIVE")
+          setPlaylistDesc("Những bài nhạc để lái xe đêm. Tốc độ vừa phải, ánh đèn đường, và không gian rộng lớn phía trước.")
         }
       } catch (err) {
         console.warn("Could not load Spotify playlist from API, using default tracks:", err)
+        if (isMounted && (!initialCache || tracks.length === 0)) {
+          setTracks(TRACKS)
+          setPlaylistCover(PLAYLIST_COVER)
+          setPlaylistTitle("NIGHT DRIVE")
+          setPlaylistDesc("Những bài nhạc để lái xe đêm. Tốc độ vừa phải, ánh đèn đường, và không gian rộng lớn phía trước.")
+        }
       } finally {
         if (isMounted) setLoadingPlaylist(false)
       }
@@ -335,57 +433,72 @@ export default function MusicPage({ onBack, exiting }: { onBack?: () => void; ex
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-8 sm:px-6">
 
         {/* ── Top section: cover + info ── */}
-        <div className="page-enter-hero mb-8 flex flex-col gap-6 sm:flex-row sm:items-end">
-
-          {/* Cover */}
-          <div className="size-44 shrink-0 overflow-hidden rounded-sm shadow-2xl sm:size-52 border border-line/40 bg-ink">
-            <img src={playlistCover} alt={playlistTitle} className="size-full object-cover" />
-          </div>
-
-          {/* Info */}
-          <div className="flex flex-col gap-2 min-w-0 flex-1">
-            <span className="font-mono text-[9px] tracking-[0.26em] text-muted">PLAYLIST</span>
-            <h1 className="font-mono text-2xl font-bold leading-tight text-fg sm:text-3xl lg:text-4xl break-words">{playlistTitle}</h1>
-            {playlistDesc && (
-              <p className="max-w-2xl font-sans text-sm leading-relaxed text-muted break-words">
-                {playlistDesc}
-              </p>
-            )}
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] tracking-[0.12em] text-muted/60">
-              <span className="text-fg/70">{playlistOwner || "MEDONTHAN"}</span>
-              <span className="text-line">·</span>
-              <span>{tracks.length} bài hát</span>
-              <span className="text-line">·</span>
-              <span>~{Math.round(tracks.length * 3.5)} phút</span>
-            </div>
-            {/* Action buttons */}
-            <div className="mt-3 flex items-center gap-2 sm:gap-3">
-              {/* Play */}
-              <button onClick={() => tracks[0] && play(tracks[0].id)}
-                className="flex items-center gap-2 rounded-sm bg-[#1db954] px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.16em] text-ink transition-all hover:bg-[#1ed760] hover:shadow-[0_0_20px_#1db95440] sm:px-5">
-                <PlayIcon size="4" />
-                <span className="hidden sm:inline">PHÁT NHẠC</span>
-              </button>
-
-              {/* Shuffle */}
-              <button onClick={() => setShuffled((s) => !s)}
-                className={`flex items-center gap-2 rounded-sm border px-3 py-2.5 font-mono text-[11px] tracking-[0.14em] transition-all sm:px-4 ${shuffled
-                    ? "border-[#1db954]/50 bg-[#1db954]/10 text-[#1db954]"
-                    : "border-line text-muted hover:border-muted/50 hover:text-fg"
-                  }`}>
-                <ShuffleIcon />
-                <span className="hidden sm:inline">SHUFFLE</span>
-              </button>
-
-              {/* Open in Spotify */}
-              <a href={playlistUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-sm border border-[#1db954]/30 bg-[#1db954]/10 px-3 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#1db954] transition-all hover:border-[#1db954]/60 hover:bg-[#1db954]/20 sm:px-4">
-                <SpotifyIcon size="4" />
-                <span className="hidden sm:inline">MỞ TRONG SPOTIFY</span>
-              </a>
+        {loadingPlaylist && tracks.length === 0 ? (
+          <div className="page-enter-hero mb-8 flex flex-col gap-6 sm:flex-row sm:items-end animate-pulse">
+            <div className="size-44 shrink-0 rounded-sm border border-line/40 bg-panel-2 sm:size-52" />
+            <div className="flex flex-col gap-3 min-w-0 flex-1">
+              <div className="h-3 w-16 bg-line/60 rounded-sm" />
+              <div className="h-8 sm:h-10 w-64 max-w-full bg-line/80 rounded-sm" />
+              <div className="h-4 w-96 max-w-full bg-line/40 rounded-sm" />
+              <div className="h-3 w-48 bg-line/40 rounded-sm" />
+              <div className="mt-2 flex items-center gap-3">
+                <div className="h-9 w-28 bg-[#1db954]/20 border border-[#1db954]/30 rounded-sm" />
+                <div className="h-9 w-24 bg-panel-2 border border-line rounded-sm" />
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="page-enter-hero mb-8 flex flex-col gap-6 sm:flex-row sm:items-end">
+            {/* Cover */}
+            <div className="size-44 shrink-0 overflow-hidden rounded-sm shadow-2xl sm:size-52 border border-line/40 bg-ink">
+              <img src={playlistCover} alt={playlistTitle} className="size-full object-cover" />
+            </div>
+
+            {/* Info */}
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <span className="font-mono text-[9px] tracking-[0.26em] text-muted">PLAYLIST</span>
+              <h1 className="font-mono text-2xl font-bold leading-tight text-fg sm:text-3xl lg:text-4xl break-words">{playlistTitle}</h1>
+              {playlistDesc && (
+                <p className="max-w-2xl font-sans text-sm leading-relaxed text-muted break-words">
+                  {playlistDesc}
+                </p>
+              )}
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] tracking-[0.12em] text-muted/60">
+                <span className="text-fg/70">{playlistOwner || "MEDONTHAN"}</span>
+                <span className="text-line">·</span>
+                <span>{tracks.length} bài hát</span>
+                <span className="text-line">·</span>
+                <span>~{Math.round(tracks.length * 3.5)} phút</span>
+              </div>
+              {/* Action buttons */}
+              <div className="mt-3 flex items-center gap-2 sm:gap-3">
+                {/* Play */}
+                <button onClick={() => tracks[0] && play(tracks[0].id)}
+                  className="flex items-center gap-2 rounded-sm bg-[#1db954] px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.16em] text-ink transition-all hover:bg-[#1ed760] hover:shadow-[0_0_20px_#1db95440] sm:px-5">
+                  <PlayIcon size="4" />
+                  <span className="hidden sm:inline">PHÁT NHẠC</span>
+                </button>
+
+                {/* Shuffle */}
+                <button onClick={() => setShuffled((s) => !s)}
+                  className={`flex items-center gap-2 rounded-sm border px-3 py-2.5 font-mono text-[11px] tracking-[0.14em] transition-all sm:px-4 ${shuffled
+                      ? "border-[#1db954]/50 bg-[#1db954]/10 text-[#1db954]"
+                      : "border-line text-muted hover:border-muted/50 hover:text-fg"
+                    }`}>
+                  <ShuffleIcon />
+                  <span className="hidden sm:inline">SHUFFLE</span>
+                </button>
+
+                {/* Open in Spotify */}
+                <a href={playlistUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-sm border border-[#1db954]/30 bg-[#1db954]/10 px-3 py-2.5 font-mono text-[11px] tracking-[0.14em] text-[#1db954] transition-all hover:border-[#1db954]/60 hover:bg-[#1db954]/20 sm:px-4">
+                  <SpotifyIcon size="4" />
+                  <span className="hidden sm:inline">MỞ TRONG SPOTIFY</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Track list ── */}
         <div className={`page-enter-list rounded-sm border transition-colors duration-700 ${skyNight ? "border-white/10 bg-white/5 backdrop-blur-sm" : "border-line bg-panel"}`}>
@@ -399,7 +512,27 @@ export default function MusicPage({ onBack, exiting }: { onBack?: () => void; ex
           </div>
 
           {/* Tracks */}
-          {tracks.map((track) => {
+          {loadingPlaylist && tracks.length === 0 ? (
+            Array.from({ length: 8 }).map((_, idx) => (
+              <div key={idx} className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 px-4 sm:px-6 py-2.5 sm:grid-cols-[2rem_1.4fr_1fr_5rem] border-b border-line/20 last:border-0 animate-pulse">
+                <div className="h-3 w-3 mx-auto bg-line/40 rounded-sm" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-9 shrink-0 rounded-sm bg-line/50" />
+                  <div className="space-y-1.5 flex-1 max-w-[240px]">
+                    <div className="h-3 w-3/4 bg-line/60 rounded-sm" />
+                    <div className="h-2.5 w-1/2 bg-line/40 rounded-sm" />
+                  </div>
+                </div>
+                <div className="hidden sm:block">
+                  <div className="h-2.5 w-28 bg-line/30 rounded-sm" />
+                </div>
+                <div className="text-right sm:text-center">
+                  <div className="h-2.5 w-8 ml-auto sm:mx-auto bg-line/30 rounded-sm" />
+                </div>
+              </div>
+            ))
+          ) : (
+            tracks.map((track) => {
             const isPlaying = playingId === track.id && !paused
             const isActive = playingId === track.id
             return (

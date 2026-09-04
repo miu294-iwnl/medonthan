@@ -3,7 +3,7 @@ import Hls from "hls.js"
 import steamIconSvg from "./imports/Steam_icon_logo.svg"
 import xboxLogoSvg from "./imports/Xbox_Logo.svg"
 import MusicPlayer from "./components/MusicPlayer"
-import MusicPage from "./MusicPage"
+import MusicPage, { prefetchMusicPlaylist } from "./MusicPage"
 
 type Status = "backlog" | "next" | "playing" | "beaten"
 type Priority = "low" | "medium" | "high"
@@ -442,6 +442,11 @@ export default function App() {
     }
   }, [])
 
+  // Prefetch music playlist quietly in background so Music page opens instantly
+  useEffect(() => {
+    prefetchMusicPlaylist()
+  }, [])
+
   const [games, setGames] = useState<Game[]>([])
   const [loadingGames, setLoadingGames] = useState(true)
   const [steamTotalHours, setSteamTotalHours] = useState<number | null>(null)
@@ -732,6 +737,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => switchPage("music")}
+              onMouseEnter={() => prefetchMusicPlaylist()}
               className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime">
               ♫ MUSIC
             </button>
