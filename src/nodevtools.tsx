@@ -27,7 +27,7 @@ function StandaloneNoDevTools() {
       setIsStillOpen(isOpen)
       if (!isOpen) {
         // Devtools was closed, redirect back to the main app
-        window.location.replace("/")
+        window.location.replace("/games")
       }
     }
 
@@ -39,7 +39,7 @@ function StandaloneNoDevTools() {
 
   const handleRetry = () => {
     if (!isStillOpen) {
-      window.location.replace("/")
+      window.location.replace("/games")
     } else {
       window.location.reload()
     }

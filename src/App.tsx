@@ -403,21 +403,39 @@ function getGameStoreLink(game: Game) {
 }
 
 const LANG_KEY = "game-wishlist-lang"
+const PAGE_STORAGE_KEY = "medonthan_active_page"
+
+function getInitialPage(): "games" | "music" {
+  if (typeof window !== "undefined") {
+    const path = window.location.pathname.toLowerCase()
+    if (path === "/music" || path.startsWith("/music/")) {
+      try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+      return "music"
+    }
+    if (path === "/games" || path.startsWith("/games/") || path.startsWith("/app/")) {
+      try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+      return "games"
+    }
+    // Fallback: If URL is root "/" or "/index.html", check saved state so F5 keeps user on current page
+    try {
+      const saved = localStorage.getItem(PAGE_STORAGE_KEY)
+      if (saved === "music" || saved === "games") {
+        return saved
+      }
+    } catch {}
+  }
+  return "games"
+}
 
 export default function App() {
-  const [page, setPage] = useState<"games" | "music">(() => {
-    if (typeof window !== "undefined") {
-      const path = window.location.pathname.toLowerCase()
-      if (path === "/music" || path.startsWith("/music/")) {
-        return "music"
-      }
-    }
-    return "games"
-  })
+  const [page, setPage] = useState<"games" | "music">(getInitialPage)
   const [exiting, setExiting] = useState(false)
 
   const switchPage = (next: "games" | "music", updateHistory = true) => {
     if (next === page) return
+    try {
+      localStorage.setItem(PAGE_STORAGE_KEY, next)
+    } catch {}
     setExiting(true)
     setTimeout(() => {
       setPage(next)
@@ -432,15 +450,22 @@ export default function App() {
     }, 240)
   }
 
-  // Redirect root / to /games automatically
+  // Ensure URL defaults to /games (or /music) instead of / or /index.html
   useEffect(() => {
     if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(PAGE_STORAGE_KEY, page)
+      } catch {}
+
       const path = window.location.pathname
-      if (!path || path === "/") {
-        window.history.replaceState({ page: "games" }, "", "/games")
+      const lower = path.toLowerCase()
+      // If path is root "/" or "/index.html", immediately replace in address bar with /games or /music
+      if (!path || path === "/" || lower === "/index.html" || lower.endsWith("/index.html")) {
+        const targetUrl = page === "music" ? "/music" : "/games"
+        window.history.replaceState({ page }, "", targetUrl)
       }
     }
-  }, [])
+  }, [page])
 
   // Prefetch music playlist quietly in background so Music page opens instantly
   useEffect(() => {
@@ -495,7 +520,7 @@ export default function App() {
 
         // Match route path on initial load if URL contains /app/... or /games/store/...
         const path = window.location.pathname.toLowerCase()
-        if (path && path !== "/" && path !== "/games" && path !== "/games/" && !path.startsWith("/music")) {
+        if (path && path !== "/" && path !== "/games" && path !== "/games/" && !path.startsWith("/music") && !path.includes("index.html")) {
           const matched = data.find((g) => {
             const gamePath = getGameUrlPath(g)
             return path.startsWith(gamePath.toLowerCase()) ||
@@ -525,10 +550,12 @@ export default function App() {
       const path = window.location.pathname.toLowerCase()
       if (path === "/music" || path.startsWith("/music/")) {
         setPage("music")
+        try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
         setSelectedId(null)
       } else {
         setPage("games")
-        if (!path || path === "/" || path === "/games" || path === "/games/") {
+        try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+        if (!path || path === "/" || path === "/games" || path === "/games/" || path.includes("index.html")) {
           setSelectedId(null)
         } else {
           const matched = games.find((g) => {
