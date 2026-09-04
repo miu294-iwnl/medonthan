@@ -35,9 +35,10 @@ Component trung tâm điều phối toàn bộ luồng trang chính (Games Backl
 #### State Management & Định tuyến (Routing & Persistence)
 - `PAGE_STORAGE_KEY = "medonthan_active_page"`: Key lưu trữ trạng thái trang hiện tại trong `localStorage`.
 - `page` (`"games" | "music"`): Trạng thái trang hiện tại. Khởi tạo qua hàm `getInitialPage()`:
-  - Ưu tiên 1: Đọc từ đường dẫn `window.location.pathname` (`/music` -> mở music, `/games` hoặc `/app/...` -> mở games).
+  - Ưu tiên 1: Đọc từ đường dẫn `window.location.pathname`, `hash`, và `search` (hỗ trợ `/music`, `/music/`, `/music.html`, `#/music`, `?page=music`, `/games`, `/app/...`). Đảm bảo khi người dùng gõ URL trực tiếp hoặc mở liên kết từ ngoài vào sẽ giữ nguyên trang mong muốn 100%.
   - Ưu tiên 2: Nếu đường dẫn là root `/` hoặc `/index.html` (do CDN / máy chủ tĩnh phục vụ khi F5), đọc từ `localStorage.getItem("medonthan_active_page")` để giữ nguyên trang người dùng đang xem, chống việc bị văng về trang mặc định khi F5.
-- Tự động chuẩn hóa URL (Clean URL): `useEffect` theo dõi `page`, nếu URL đang là `/` hoặc `/index.html`, ngay lập tức dùng `window.history.replaceState` cập nhật thành `/games` (hoặc `/music`), giúp thanh địa chỉ trình duyệt luôn hiển thị `/games` thay vì `/index.html`.
+- Tự động chuẩn hóa URL (Clean URL): `useEffect` theo dõi `page`, nếu URL đang là `/` hoặc `/index.html` hoặc `*.html`, ngay lập tức dùng `window.history.replaceState` cập nhật thành `/games` (hoặc `/music`), giúp thanh địa chỉ trình duyệt luôn hiển thị chuẩn đẹp (`/games` hoặc `/music`).
+- Script `scripts/postbuild.js`: Tự động sao chép `dist/index.html` thành `dist/music/index.html`, `dist/games/index.html`, `dist/music.html`, `dist/games.html`, và `dist/404.html`. Giúp mọi nền tảng máy chủ tĩnh (Render Static Site, Netlify, Vercel, GitHub Pages) đều phục vụ trực tiếp HTTP 200 cho `/music` và `/games` mà không bao giờ bị redirect hay văng về trang mặc định.
 - `exiting` (`boolean`): Cờ kích hoạt animation chuyển trang mượt mà trước khi component unmount.
 - `games` (`Game[]`): Danh sách các bản ghi game nạp từ backend.
 - `loadingGames` (`boolean`): Trạng thái đang tải dữ liệu danh sách game ban đầu.

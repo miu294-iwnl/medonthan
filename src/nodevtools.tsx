@@ -26,8 +26,12 @@ function StandaloneNoDevTools() {
     const handleDetector = (isOpen: boolean) => {
       setIsStillOpen(isOpen)
       if (!isOpen) {
-        // Devtools was closed, redirect back to the main app
-        window.location.replace("/games")
+        // Devtools was closed, redirect back to the page the user was on
+        let returnUrl = "/games"
+        try {
+          returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games"
+        } catch {}
+        window.location.replace(returnUrl)
       }
     }
 
@@ -39,7 +43,11 @@ function StandaloneNoDevTools() {
 
   const handleRetry = () => {
     if (!isStillOpen) {
-      window.location.replace("/games")
+      let returnUrl = "/games"
+      try {
+        returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games"
+      } catch {}
+      window.location.replace(returnUrl)
     } else {
       window.location.reload()
     }

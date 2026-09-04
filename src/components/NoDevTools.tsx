@@ -22,7 +22,11 @@ export default function NoDevTools({ lang, setLang, onRetry }: NoDevToolsProps) 
     if (onRetry) {
       onRetry();
     } else {
-      window.location.href = "/";
+      let returnUrl = "/games";
+      try {
+        returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games";
+      } catch {}
+      window.location.href = returnUrl;
     }
   };
 

@@ -10,9 +10,9 @@
     "dev": "vite --host 0.0.0.0",
     "server": "node server/index.js",
     "server:dev": "node server/index.js",
-    "build": "vite build",
+    "build": "vite build && node scripts/postbuild.js",
     "build:server": "cd server && npm install && npx prisma generate",
-    "build:all": "vite build && cd server && npm install && npx prisma db push --accept-data-loss && npx prisma generate",
+    "build:all": "vite build && node scripts/postbuild.js && cd server && npm install && npx prisma generate",
     "start": "node server/index.js",
     "preview": "vite preview",
     "format": "oxfmt"

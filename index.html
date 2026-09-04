@@ -9,6 +9,7 @@
       (function() {
         function blockAccess() {
           try {
+            sessionStorage.setItem('medonthan_return_url', window.location.pathname + window.location.search + window.location.hash);
             document.documentElement.innerHTML = '';
           } catch(e){}
           window.location.replace('/nodevtools.html');

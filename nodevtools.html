@@ -431,15 +431,23 @@
       setLanguage(currentLang);
 
       function handleRetry() {
+        var returnUrl = '/games';
+        try {
+          returnUrl = sessionStorage.getItem('medonthan_return_url') || '/games';
+        } catch(e) {}
         if (!isDevToolsOpen) {
-          window.location.replace('/games');
+          window.location.replace(returnUrl);
         } else {
           window.location.reload();
         }
       }
 
       function handleReturnHome() {
-        window.location.replace('/games');
+        var returnUrl = '/games';
+        try {
+          returnUrl = sessionStorage.getItem('medonthan_return_url') || '/games';
+        } catch(e) {}
+        window.location.replace(returnUrl);
       }
     </script>
   </body>

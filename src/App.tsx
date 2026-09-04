@@ -409,16 +409,42 @@ const PAGE_STORAGE_KEY = "medonthan_active_page"
 
 function getInitialPage(): "games" | "music" {
   if (typeof window !== "undefined") {
-    const path = window.location.pathname.toLowerCase()
-    if (path === "/music" || path.startsWith("/music/")) {
+    const rawPath = window.location.pathname.toLowerCase()
+    const search = window.location.search.toLowerCase()
+    const hash = window.location.hash.toLowerCase()
+    const full = (rawPath + search + hash).toLowerCase()
+
+    // 1. Check if Music is targeted via pathname, hash (#music or #/music), or query (?page=music)
+    if (
+      rawPath === "/music" ||
+      rawPath.startsWith("/music/") ||
+      rawPath.endsWith("/music") ||
+      rawPath.endsWith("/music/") ||
+      rawPath.includes("/music.") ||
+      full.includes("page=music") ||
+      full.includes("#music") ||
+      full.includes("#/music")
+    ) {
       try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
       return "music"
     }
-    if (path === "/games" || path.startsWith("/games/") || path.startsWith("/app/")) {
+
+    // 2. Check if Games is targeted via pathname, store/app route, hash, or query
+    if (
+      rawPath === "/games" ||
+      rawPath.startsWith("/games/") ||
+      rawPath.endsWith("/games") ||
+      rawPath.endsWith("/games/") ||
+      rawPath.includes("/app/") ||
+      full.includes("page=games") ||
+      full.includes("#games") ||
+      full.includes("#/games")
+    ) {
       try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
       return "games"
     }
-    // Fallback: If URL is root "/" or "/index.html", check saved state so F5 keeps user on current page
+
+    // 3. Fallback: If URL is root "/" or "/index.html", check saved state so F5 keeps user on current page
     try {
       const saved = localStorage.getItem(PAGE_STORAGE_KEY)
       if (saved === "music" || saved === "games") {
@@ -461,8 +487,17 @@ export default function App() {
 
       const path = window.location.pathname
       const lower = path.toLowerCase()
-      // If path is root "/" or "/index.html", immediately replace in address bar with /games or /music
-      if (!path || path === "/" || lower === "/index.html" || lower.endsWith("/index.html")) {
+      // If path is root "/" or "/index.html" or "*.html", clean up address bar with /games or /music
+      if (
+        !path ||
+        path === "/" ||
+        lower === "/index.html" ||
+        lower.endsWith("/index.html") ||
+        lower === "/music.html" ||
+        lower.endsWith("/music.html") ||
+        lower === "/games.html" ||
+        lower.endsWith("/games.html")
+      ) {
         const targetUrl = page === "music" ? "/music" : "/games"
         window.history.replaceState({ page }, "", targetUrl)
       }
@@ -558,22 +593,36 @@ export default function App() {
   // Handle browser back/forward buttons
   useEffect(() => {
     const onPopState = () => {
-      const path = window.location.pathname.toLowerCase()
-      if (path === "/music" || path.startsWith("/music/")) {
+      const rawPath = window.location.pathname.toLowerCase()
+      const search = window.location.search.toLowerCase()
+      const hash = window.location.hash.toLowerCase()
+      const full = (rawPath + search + hash).toLowerCase()
+
+      const isMusic =
+        rawPath === "/music" ||
+        rawPath.startsWith("/music/") ||
+        rawPath.endsWith("/music") ||
+        rawPath.endsWith("/music/") ||
+        rawPath.includes("/music.") ||
+        full.includes("page=music") ||
+        full.includes("#music") ||
+        full.includes("#/music")
+
+      if (isMusic) {
         setPage("music")
         try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
         setSelectedId(null)
       } else {
         setPage("games")
         try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
-        if (!path || path === "/" || path === "/games" || path === "/games/" || path.includes("index.html")) {
+        if (!rawPath || rawPath === "/" || rawPath === "/games" || rawPath === "/games/" || rawPath.includes("index.html") || rawPath.includes("games.html")) {
           setSelectedId(null)
         } else {
           const matched = games.find((g) => {
             const gamePath = getGameUrlPath(g)
-            return path.startsWith(gamePath.toLowerCase()) ||
-              (g.storeId && path.includes(g.storeId)) ||
-              (g.id && path.includes(g.id))
+            return rawPath.startsWith(gamePath.toLowerCase()) ||
+              (g.storeId && rawPath.includes(g.storeId)) ||
+              (g.id && rawPath.includes(g.id))
           })
           if (matched) {
             setSelectedId(matched.id)
