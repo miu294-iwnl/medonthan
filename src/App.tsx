@@ -4,6 +4,8 @@ import steamIconSvg from "./imports/Steam_icon_logo.svg"
 import xboxLogoSvg from "./imports/Xbox_Logo.svg"
 import MusicPlayer from "./components/MusicPlayer"
 import MusicPage, { prefetchMusicPlaylist } from "./MusicPage"
+import AdminAuthModal from "./components/AdminAuthModal"
+import { getAdminToken } from "./lib/auth"
 
 type Status = "backlog" | "next" | "playing" | "beaten"
 type Priority = "low" | "medium" | "high"
@@ -478,6 +480,15 @@ export default function App() {
   const [filter, setFilter] = useState<Status | "all">("all")
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [pendingGameData, setPendingGameData] = useState<{
+    title: string
+    platform: string
+    storeId?: string
+    storeType?: string
+    lndLink?: string
+    hours?: number
+  } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -675,6 +686,43 @@ export default function App() {
     }
   }
 
+  const commitAddGame = async (gameData: {
+    title: string
+    platform: string
+    storeId?: string
+    storeType?: string
+    lndLink?: string
+    hours?: number
+  }) => {
+    const token = getAdminToken()
+    try {
+      const res = await fetch("/api/games", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "x-admin-token": token } : {}),
+        },
+        body: JSON.stringify(gameData),
+      })
+      if (res.status === 401 || res.status === 403) {
+        showToast(lang === "vi" ? "Yêu cầu mật khẩu quản trị viên để thêm game" : "Admin password required to add games", "error")
+        setPendingGameData(gameData)
+        setAuthModalOpen(true)
+        return
+      }
+      if (res.status === 409) {
+        showToast(t.gameAlreadyExists, "error")
+      } else if (res.ok) {
+        const created = await res.json()
+        setGames((prev) => [created, ...prev])
+        setAdding(false)
+        setPendingGameData(null)
+      }
+    } catch (e) {
+      console.error("Failed to add game:", e)
+    }
+  }
+
   const addGame = async (title: string, platform: string, storeId?: string, storeType?: string, lndLink?: string, hours?: number) => {
     const normTitle = (title || "").toLowerCase().trim()
     const alreadyExists = games.some(
@@ -683,26 +731,18 @@ export default function App() {
 
     if (alreadyExists) {
       showToast(t.gameAlreadyExists, "error")
-      setAdding(false)
       return
     }
 
-    try {
-      const res = await fetch("/api/games", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, platform, storeId, storeType, lndLink, hours }),
-      })
-      if (res.status === 409) {
-        showToast(t.gameAlreadyExists, "error")
-      } else if (res.ok) {
-        const created = await res.json()
-        setGames((prev) => [created, ...prev])
-      }
-    } catch (e) {
-      console.error("Failed to add game:", e)
+    const payload = { title, platform, storeId, storeType, lndLink, hours }
+    const token = getAdminToken()
+    if (!token) {
+      setPendingGameData(payload)
+      setAuthModalOpen(true)
+      return
     }
-    setAdding(false)
+
+    await commitAddGame(payload)
   }
 
   const handleSyncPlaytime = async () => {
@@ -900,7 +940,27 @@ export default function App() {
           }} />
       )}
 
-      {adding && <AddModal t={t} onClose={() => setAdding(false)} onAdd={addGame} />}
+      {adding && (
+        <AddModal
+          t={t}
+          onClose={() => {
+            setAdding(false)
+            setPendingGameData(null)
+          }}
+          onAdd={addGame}
+        />
+      )}
+      <AdminAuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={() => {
+          setAuthModalOpen(false)
+          if (pendingGameData) {
+            commitAddGame(pendingGameData)
+          }
+        }}
+        lang={lang}
+      />
     </div>
   )
 }

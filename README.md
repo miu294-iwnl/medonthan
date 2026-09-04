@@ -28,6 +28,12 @@ Medonthan là ứng dụng web cá nhân cao cấp dùng để quản lý danh s
 - Trình phát nhạc nổi góc màn hình tại trang chính, cho phép bật/tắt bài nhạc thư giãn khi đang duyệt kho game.
 - Lưu trạng thái phát/dừng, âm lượng, tắt tiếng (mute) qua Cookie và LocalStorage.
 
+### Bảo mật thêm game bằng mật khẩu & Cookie (Admin Authentication)
+- **Popup xác thực khi thêm game:** Yêu cầu mật khẩu quản trị viên khi người dùng bấm `+ THÊM GAME`.
+- **Ghi nhớ đăng nhập qua Cookie:** Hỗ trợ checkbox "Lưu mật khẩu trên thiết bị này (lưu vào cookie)", lưu token an toàn vào Cookie trình duyệt (hạn 365 ngày). Sau khi đã lưu, các lần sau bấm thêm game sẽ mở trực tiếp mà không cần hỏi lại mật khẩu.
+- **Mã hóa an toàn trong Database:** Mật khẩu được mã hóa một chiều bằng thuật toán `scrypt` với muối ngẫu nhiên (salt 16-byte) và lưu trữ trong bảng `AdminAuth` của PostgreSQL.
+- **Tự động khởi tạo:** Lần đầu sử dụng popup sẽ tự động chuyển sang giao diện tạo mật khẩu chủ nếu DB chưa có mật khẩu. Ngoài ra cũng hỗ trợ cấu hình sẵn qua biến môi trường `ADMIN_PASSWORD` trong `server/.env`.
+
 ### Cơ chế chống can thiệp (Anti-DevTools Protection)
 - Vô hiệu hóa menu chuột phải (Context Menu).
 - Chặn toàn bộ tổ hợp phím tắt mở công cụ nhà phát triển (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S).
@@ -63,9 +69,12 @@ Medonthan là ứng dụng web cá nhân cao cấp dùng để quản lý danh s
 medonthan/
 ├── src/                        # Mã nguồn Frontend (React + TypeScript)
 │   ├── components/             # Các component giao diện
+│   │   ├── AdminAuthModal.tsx  # Popup nhập & khởi tạo mật khẩu thêm game (kèm cookie)
 │   │   ├── MusicPlayer.tsx     # Trình phát nhạc mini nổi góc màn hình
 │   │   └── NoDevTools.tsx      # Giao diện cảnh báo chặn DevTools dạng component
 │   ├── imports/                # Icon SVG tĩnh (Steam, Xbox...)
+│   ├── lib/                    # Tiện ích phía client
+│   │   └── auth.ts             # Quản lý Cookie token xác thực & API auth client
 │   ├── App.tsx                 # Component điều phối chính (Game Backlog & điều hướng)
 │   ├── MusicPage.tsx           # Trang nghe nhạc Spotify & Bầu trời sao đêm
 │   ├── nodevtools.tsx          # Điểm gắn kết cho trang nodevtools.html
@@ -74,17 +83,20 @@ medonthan/
 │   └── vite-env.d.ts           # Khai báo TypeScript cho Vite
 ├── server/                     # Mã nguồn Backend (Node.js + Express)
 │   ├── controllers/            # Bộ điều khiển xử lý logic API
+│   │   ├── authController.js   # Xác thực, cấp token & middleware kiểm tra mật khẩu
 │   │   ├── gameController.js   # Quản lý game, tìm kiếm, đồng bộ Steam
 │   │   └── musicController.js  # Lấy & cập nhật playlist Spotify
 │   ├── routes/                 # Định tuyến API
-│   │   ├── gameRoutes.js       # Định tuyến nhóm game
+│   │   ├── authRoutes.js       # Định tuyến nhóm xác thực (/api/auth)
+│   │   ├── gameRoutes.js       # Định tuyến nhóm game (được bảo vệ bởi requireAdminAuth)
 │   │   └── musicRoutes.js      # Định tuyến nhóm music
-│   ├── services/               # Tích hợp dịch vụ bên thứ ba
+│   ├── services/               # Tích hợp dịch vụ & thuật toán
+│   │   ├── authService.js      # Băm mật khẩu scrypt, ký token HMAC, lưu trữ DB
 │   │   ├── steamService.js     # Tích hợp Steam Storefront API & Steam Web API
 │   │   ├── xboxService.js      # Tích hợp Xbox Marketplace API
 │   │   └── spotifyPlaylistService.js # Lấy metadata & danh sách bài hát Spotify
 │   ├── prisma/                 # Cơ sở dữ liệu Prisma
-│   │   ├── schema.prisma       # Định nghĩa bảng Game (PostgreSQL)
+│   │   ├── schema.prisma       # Định nghĩa bảng Game và AdminAuth (PostgreSQL)
 │   │   └── seed.js             # Dữ liệu khởi tạo mẫu khi DB trống
 │   ├── lib/
 │   │   └── prisma.js           # Khởi tạo singleton PrismaClient
@@ -138,6 +150,9 @@ MUSIC_API_SPOTIFYPLAYLIST=https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM
 # Tùy chọn: Spotify Developer API (lấy mô tả chi tiết & ảnh playlist độ phân giải cao)
 SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
+
+# Tùy chọn: Mật khẩu quản trị viên (có thể đặt trước tại đây hoặc tạo trực tiếp qua popup UI)
+ADMIN_PASSWORD=
 ```
 > **Gợi ý:** Để dùng tính năng đồng bộ giờ chơi từ tài khoản Steam cá nhân, bạn có thể tạo API Key miễn phí tại [Steam Community Developer](https://steamcommunity.com/dev/apikey).
 

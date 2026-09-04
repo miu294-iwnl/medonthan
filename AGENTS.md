@@ -45,6 +45,7 @@ Component trung tâm điều phối toàn bộ luồng trang chính (Games Backl
 - `filter` (`Status | "all"`): Bộ lọc danh mục (`backlog`, `next`, `playing`, `beaten` hoặc `all`).
 - `query` (`string`): Từ khóa tìm kiếm game thời gian thực trong danh sách hiện có.
 - `adding` (`boolean`): Trạng thái mở modal thêm game mới.
+- `authModalOpen` (`boolean`): Trạng thái mở modal yêu cầu nhập / khởi tạo mật khẩu quản trị viên khi bấm thêm game.
 - `viewMode` (`"grid" | "list"`): Chế độ hiển thị dạng lưới hoặc danh sách.
 - `selectedId` (`string | null`): ID của game đang được chọn để hiển thị modal chi tiết (ảnh lớn, video trailer, review, liên kết cửa hàng).
 - `syncing` (`boolean`): Cờ đánh dấu tiến trình đồng bộ giờ chơi từ Steam Web API đang chạy.
@@ -66,8 +67,11 @@ Component trung tâm điều phối toàn bộ luồng trang chính (Games Backl
   - Gửi request `POST /api/games/sync-playtime`.
   - Nhận về danh sách game đã được cập nhật số giờ chơi thực tế từ Steam Web API.
   - Hiển thị Toast thông báo số lượng game được cập nhật.
-- `handleAddGame(data)`:
-  - Gửi request `POST /api/games` với payload `{ title, platform, storeId, storeType, lndLink, hours }`.
+- `addGame(title, platform, storeId, storeType, lndLink, hours)` & `commitAddGame(gameData)`:
+  - Khi người dùng bấm `+ THÊM GAME`, modal nhập thông tin game (`AddModal`) sẽ mở ngay lập tức để nhập tên game, nền tảng và số giờ dự kiến.
+  - Khi bấm **"Thêm vào danh sách"**:
+    - Nếu cookie token đã có (`getAdminToken()` hợp lệ): Ngay lập tức gọi `commitAddGame` gửi kèm header `x-admin-token` tới `POST /api/games`.
+    - Nếu chưa có cookie token: Lưu tạm thông tin game vào `pendingGameData` và mở popup `AdminAuthModal` đè lên trên. Khi xác thực thành công, tự động thực thi thêm game và đóng cả hai modal.
   - Nếu backend trả mã `409 Conflict` (game đã tồn tại trong danh sách), hiển thị thông báo lỗi tương ứng.
   - Nếu thành công, đưa game mới lên đầu mảng `setGames((prev) => [created, ...prev])`.
 - `handleUpdateGame(id, updates)`:
@@ -163,7 +167,36 @@ Component không gian âm nhạc Spotify và bầu trời sao đêm:
 
 ---
 
-### 2.5. Hệ thống Chống DevTools & Bảo vệ Mã nguồn
+### 2.5. `src/lib/auth.ts`
+- **Nhiệm vụ:** Quản lý Cookie xác thực phía Client và giao tiếp với các API bảo mật.
+- **Hằng số Cookie:**
+  - `ADMIN_TOKEN_COOKIE = "medonthan_admin_token"`
+  - `ADMIN_REMEMBER_COOKIE = "medonthan_admin_remember"`
+- **Các hàm xử lý:**
+  - `setCookie(name, value, days)`: Ghi cookie với cờ `SameSite=Lax` và `path=/`. Nếu có `days`, đặt thời hạn tính bằng ngày; nếu không, tạo session cookie (hết hạn khi đóng trình duyệt).
+  - `getCookie(name)`: Đọc giá trị cookie tương ứng từ `document.cookie`.
+  - `deleteCookie(name)`: Xóa cookie bằng cách đặt ngày hết hạn về quá khứ.
+  - `getAdminToken()`: Lấy token từ cookie `medonthan_admin_token` (fallback sang `localStorage` nếu cookie bị trình duyệt chặn).
+  - `saveAdminToken(token, remember)`: Nếu `remember === true`, lưu cookie 365 ngày và ghi vào `localStorage`. Nếu `false`, lưu session cookie.
+  - `clearAdminToken()`: Đăng xuất và dọn dẹp sạch token khỏi Cookie và `localStorage`.
+  - `checkAuthStatus()`: Gọi `GET /api/auth/status` kiểm tra xem DB đã có mật khẩu khởi tạo chưa (`isSetup`) và token hiện tại có hợp lệ không (`isAuthenticated`).
+  - `verifyAdminPasswordOnline(password)`: Gửi `POST /api/auth/verify` xác thực mật khẩu.
+  - `setupAdminPasswordOnline(password)`: Gửi `POST /api/auth/setup` tạo mật khẩu chủ ban đầu nếu DB chưa có.
+
+---
+
+### 2.6. `src/components/AdminAuthModal.tsx`
+- **Nhiệm vụ:** Hộp thoại popup bảo vệ thao tác thêm game.
+- **Tính năng:**
+  - Tự động nhận diện chế độ: Nếu DB chưa có mật khẩu, tự động hiển thị giao diện **Khởi tạo mật khẩu quản trị** (có trường xác nhận mật khẩu). Nếu đã có mật khẩu, hiển thị giao diện **Xác thực quản trị viên**.
+  - Nút bật/tắt hiển thị mật khẩu (Ẩn / Hiện).
+  - Checkbox **"Lưu mật khẩu trên thiết bị này (lưu vào cookie)"** (mặc định được tích chọn).
+  - Khi người dùng xác thực thành công, lưu token vào Cookie và kích hoạt callback `onSuccess()` để mở form thêm game ngay lập tức.
+  - Các lần sau khi người dùng bấm "+ THÊM GAME", hàm `getAdminToken()` kiểm tra thấy cookie hợp lệ sẽ mở thẳng form mà không cần hỏi lại mật khẩu.
+
+---
+
+### 2.7. Hệ thống Chống DevTools & Bảo vệ Mã nguồn
 Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn người dùng mở DevTools hoặc Inspect mã nguồn:
 
 1. **`index.html`:**
@@ -185,7 +218,7 @@ Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn
 
 ---
 
-### 2.6. `src/index.css` & Thiết kế Giao diện (Tailwind CSS v4)
+### 2.8. `src/index.css` & Thiết kế Giao diện (Tailwind CSS v4)
 - Sử dụng **Tailwind CSS v4** với cú pháp `@import 'tailwindcss';` (không dùng file cấu hình `tailwind.config.js`).
 - Khối `@theme` định nghĩa bảng màu chuẩn:
   - `--color-ink: #07080a`: Nền tối sâu.
@@ -252,6 +285,10 @@ Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn
   - `lndLink` (`String?`): Liên kết ngoài tải game hoặc website chính thức.
   - `storeId` (`String?`): Steam AppID hoặc Xbox ProductID.
   - `storeType` (`String?`): Loại cửa hàng (`steam` hoặc `xbox`).
+- **Model `AdminAuth`:**
+  - `id` (`String @id @default("admin_single_key")`): Định danh duy nhất cho bản ghi khóa mật khẩu chủ.
+  - `password` (`String`): Chuỗi mật khẩu đã được băm an toàn theo chuẩn `scrypt` kèm salt ngẫu nhiên dạng `salt:hash`.
+  - `createdAt` / `updatedAt` (`DateTime`): Thời điểm khởi tạo và cập nhật gần nhất.
 
 ---
 
@@ -292,7 +329,36 @@ Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn
 
 ---
 
-### 3.6. `server/services/steamService.js`
+### 3.6. `server/controllers/authController.js`
+- `extractToken(req)`: Trích xuất token xác thực từ:
+  1. Header tùy biến `x-admin-token`.
+  2. Header tiêu chuẩn `Authorization: Bearer <token>`.
+  3. Cookie `medonthan_admin_token` trong request.
+- `getAuthStatus(req, res)`: Kiểm tra DB đã thiết lập mật khẩu chưa (`isSetup`) và token có hợp lệ không (`isAuthenticated`).
+- `verifyAdminPassword(req, res)`: Xác thực mật khẩu gửi lên qua hàm `verifyPassword`, cấp token HMAC 30 ngày cho client.
+- `setupAdminPassword(req, res)`: Khởi tạo mật khẩu quản trị viên lần đầu trong DB (yêu cầu tối thiểu 4 ký tự).
+- `requireAdminAuth(req, res, next)`: Middleware chặn các request chỉnh sửa trái phép (áp dụng cho `POST /api/games`). Nếu chưa cấu hình mật khẩu thì bỏ qua, nếu đã cấu hình mà token không hợp lệ thì trả mã `401 Unauthorized`.
+
+---
+
+### 3.7. `server/services/authService.js`
+- `hashPassword(password)`: Tạo salt 16-byte ngẫu nhiên và băm bằng thuật toán mật mã `crypto.scryptSync(..., 64)`, lưu dạng `salt:hash`.
+- `verifyPassword(password, storedHash)`: Tách `salt` và `hash`, băm lại và so sánh bằng `crypto.timingSafeEqual` nhằm chống tấn công phân tích thời gian (Timing Attack).
+- `createAuthToken(storedHash)`: Tạo token dạng `timestamp.signature` bằng HMAC-SHA256 với khóa bí mật chính là hash của mật khẩu.
+- `verifyAuthToken(token, storedHash)`: Kiểm tra chữ ký HMAC và hạn sử dụng 30 ngày. Token tự động mất hiệu lực nếu mật khẩu trong DB bị đổi.
+- `getStoredAdminPassword()` / `saveAdminPassword(hashed)`: Truy vấn và lưu trữ an toàn trong bảng `AdminAuth` của PostgreSQL qua Prisma ORM, có fallback raw SQL và tự động nhận diện `ADMIN_PASSWORD` từ file `.env` nếu có.
+
+---
+
+### 3.8. `server/routes/authRoutes.js`
+- Khai báo các endpoint:
+  - `GET /api/auth/status`
+  - `POST /api/auth/verify`
+  - `POST /api/auth/setup`
+
+---
+
+### 3.9. `server/services/steamService.js`
 
 - `searchSteam(keyword)`: Gửi request đến `https://store.steampowered.com/api/storesearch/?term={keyword}&l=vietnamese&cc=VN` để lấy danh sách kết quả gợi ý.
 - `getSteamGameDetails(appId)`:
@@ -307,13 +373,13 @@ Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn
 
 ---
 
-### 3.7. `server/services/xboxService.js`
+### 3.10. `server/services/xboxService.js`
 - `searchXbox(keyword)`: Tìm kiếm game thông qua API của Microsoft Xbox Store.
 - `getXboxGameDetails(productId)`: Lấy thông tin chi tiết game Xbox: tên, ảnh bìa dọc/ngang, giá tiền, ngày phát hành.
 
 ---
 
-### 3.8. `server/services/spotifyPlaylistService.js`
+### 3.11. `server/services/spotifyPlaylistService.js`
 - `extractPlaylistId(input)`: Phân tích chuỗi URL dạng web (`https://open.spotify.com/playlist/...`), URI (`spotify:playlist:...`) hoặc ID nguyên bản để lấy ra Spotify Playlist ID 22 ký tự.
 - `getSpotifyApiToken()`:
   - Kiểm tra biến môi trường `SPOTIFY_CLIENT_ID` và `SPOTIFY_CLIENT_SECRET`.

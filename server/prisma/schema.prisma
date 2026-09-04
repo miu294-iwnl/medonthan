@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Game {
@@ -40,4 +40,11 @@ model Game {
   lndLink         String?
   storeId         String?
   storeType       String?
+}
+
+model AdminAuth {
+  id        String   @id @default("admin_single_key")
+  password  String   // Scrypt hashed password in format salt:hash
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

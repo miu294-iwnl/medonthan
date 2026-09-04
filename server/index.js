@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import gameRoutes from "./routes/gameRoutes.js";
 import musicRoutes from "./routes/musicRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import { seedDatabaseIfEmpty } from "./prisma/seed.js";
 
 // Load environment variables securely from .env
@@ -24,6 +25,7 @@ app.use(express.json());
 // Routes
 app.use("/api", gameRoutes);
 app.use("/api", musicRoutes);
+app.use("/api/auth", authRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
