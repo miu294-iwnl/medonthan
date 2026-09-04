@@ -578,7 +578,8 @@ export default function MusicPage({ onBack, exiting }: { onBack?: () => void; ex
 
               </div>
             )
-          })}
+          })
+        )}
         </div>
 
       </div>
