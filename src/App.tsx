@@ -3,6 +3,7 @@ import Hls from "hls.js"
 import steamIconSvg from "./imports/Steam_icon_logo.svg"
 import xboxLogoSvg from "./imports/Xbox_Logo.svg"
 import MusicPlayer from "./components/MusicPlayer"
+import MusicPage from "./MusicPage"
 
 type Status = "backlog" | "next" | "playing" | "beaten"
 type Priority = "low" | "medium" | "high"
@@ -118,13 +119,13 @@ const T = {
     gameAlreadyExists: "Game is already in your list",
     timeAgo: (ms: number) => {
       const s = Math.floor(ms / 1000)
-      if (s < 60)  return "just now"
+      if (s < 60) return "just now"
       const m = Math.floor(s / 60)
-      if (m < 60)  return `${m}m ago`
+      if (m < 60) return `${m}m ago`
       const h = Math.floor(m / 60)
-      if (h < 24)  return `${h}h ago`
+      if (h < 24) return `${h}h ago`
       const d = Math.floor(h / 24)
-      if (d < 30)  return `${d}d ago`
+      if (d < 30) return `${d}d ago`
       const mo = Math.floor(d / 30)
       if (mo < 12) return `${mo}mo ago`
       return `${Math.floor(mo / 12)}y ago`
@@ -199,13 +200,13 @@ const T = {
     gameAlreadyExists: "Game này đã có sẵn",
     timeAgo: (ms: number) => {
       const s = Math.floor(ms / 1000)
-      if (s < 60)  return "vừa xong"
+      if (s < 60) return "vừa xong"
       const m = Math.floor(s / 60)
-      if (m < 60)  return `${m} phút trước`
+      if (m < 60) return `${m} phút trước`
       const h = Math.floor(m / 60)
-      if (h < 24)  return `${h} giờ trước`
+      if (h < 24) return `${h} giờ trước`
       const d = Math.floor(h / 24)
-      if (d < 30)  return `${d} ngày trước`
+      if (d < 30) return `${d} ngày trước`
       const mo = Math.floor(d / 30)
       if (mo < 12) return `${mo} tháng trước`
       return `${Math.floor(mo / 12)} năm trước`
@@ -404,6 +405,43 @@ function getGameStoreLink(game: Game) {
 const LANG_KEY = "game-wishlist-lang"
 
 export default function App() {
+  const [page, setPage] = useState<"games" | "music">(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname.toLowerCase()
+      if (path === "/music" || path.startsWith("/music/")) {
+        return "music"
+      }
+    }
+    return "games"
+  })
+  const [exiting, setExiting] = useState(false)
+
+  const switchPage = (next: "games" | "music", updateHistory = true) => {
+    if (next === page) return
+    setExiting(true)
+    setTimeout(() => {
+      setPage(next)
+      setExiting(false)
+      if (updateHistory) {
+        if (next === "music") {
+          window.history.pushState({ page: "music" }, "", "/music")
+        } else {
+          window.history.pushState({ page: "games" }, "", "/games")
+        }
+      }
+    }, 240)
+  }
+
+  // Redirect root / to /games automatically
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname
+      if (!path || path === "/") {
+        window.history.replaceState({ page: "games" }, "", "/games")
+      }
+    }
+  }, [])
+
   const [games, setGames] = useState<Game[]>([])
   const [loadingGames, setLoadingGames] = useState(true)
   const [steamTotalHours, setSteamTotalHours] = useState<number | null>(null)
@@ -418,13 +456,13 @@ export default function App() {
     try {
       const s = localStorage.getItem(LANG_KEY)
       if (s === "en" || s === "vi") return s
-    } catch {}
+    } catch { }
     return "vi"
   })
 
   const t = T[lang]
 
-  useEffect(() => { try { localStorage.setItem(LANG_KEY, lang) } catch {} }, [lang])
+  useEffect(() => { try { localStorage.setItem(LANG_KEY, lang) } catch { } }, [lang])
 
   // Fetch Steam account statistics (total playtime of all games on Steam)
   const fetchSteamStats = async () => {
@@ -449,14 +487,14 @@ export default function App() {
       if (res.ok) {
         const data: Game[] = await res.json()
         setGames(data)
-        
+
         // Match route path on initial load if URL contains /app/... or /games/store/...
-        const path = window.location.pathname
-        if (path && path !== "/") {
+        const path = window.location.pathname.toLowerCase()
+        if (path && path !== "/" && path !== "/games" && path !== "/games/" && !path.startsWith("/music")) {
           const matched = data.find((g) => {
             const gamePath = getGameUrlPath(g)
-            return path.toLowerCase().startsWith(gamePath.toLowerCase()) || 
-              (g.storeId && path.includes(g.storeId)) || 
+            return path.startsWith(gamePath.toLowerCase()) ||
+              (g.storeId && path.includes(g.storeId)) ||
               (g.id && path.includes(g.id))
           })
           if (matched) {
@@ -479,18 +517,24 @@ export default function App() {
   // Handle browser back/forward buttons
   useEffect(() => {
     const onPopState = () => {
-      const path = window.location.pathname
-      if (!path || path === "/") {
+      const path = window.location.pathname.toLowerCase()
+      if (path === "/music" || path.startsWith("/music/")) {
+        setPage("music")
         setSelectedId(null)
       } else {
-        const matched = games.find((g) => {
-          const gamePath = getGameUrlPath(g)
-          return path.toLowerCase().startsWith(gamePath.toLowerCase()) || 
-            (g.storeId && path.includes(g.storeId)) || 
-            (g.id && path.includes(g.id))
-        })
-        if (matched) {
-          setSelectedId(matched.id)
+        setPage("games")
+        if (!path || path === "/" || path === "/games" || path === "/games/") {
+          setSelectedId(null)
+        } else {
+          const matched = games.find((g) => {
+            const gamePath = getGameUrlPath(g)
+            return path.startsWith(gamePath.toLowerCase()) ||
+              (g.storeId && path.includes(g.storeId)) ||
+              (g.id && path.includes(g.id))
+          })
+          if (matched) {
+            setSelectedId(matched.id)
+          }
         }
       }
     }
@@ -505,7 +549,7 @@ export default function App() {
 
   const closeGameDetail = () => {
     setSelectedId(null)
-    window.history.pushState({}, "", "/")
+    window.history.pushState({}, "", "/games")
   }
 
   useEffect(() => {
@@ -522,7 +566,7 @@ export default function App() {
   const visible = useMemo(() => games.filter((g) => {
     const okStatus = filter === "all" || g.status === filter
     const gGenre = getGameGenre(g, lang)
-    const okQuery  = !query ||
+    const okQuery = !query ||
       g.title.toLowerCase().includes(query.toLowerCase()) ||
       gGenre.toLowerCase().includes(query.toLowerCase()) ||
       (g.genre && g.genre.toLowerCase().includes(query.toLowerCase())) ||
@@ -654,15 +698,16 @@ export default function App() {
     }
   }
 
+  if (page === "music") return <MusicPage onBack={() => switchPage("games")} exiting={exiting} />
+
   return (
-    <div className="min-h-full">
+    <div className={`min-h-full ${exiting ? "page-exiting" : ""}`}>
       {/* Toast Alert */}
       {toastInfo && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-sm px-4 py-3 shadow-2xl backdrop-blur-md ${
-          toastInfo.type === "error"
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-sm px-4 py-3 shadow-2xl backdrop-blur-md ${toastInfo.type === "error"
             ? "border border-flame/70 bg-[#160c0c] text-flame shadow-flame/10"
             : "border border-lime/50 bg-panel text-fg"
-        }`}>
+          }`}>
           <span className={`text-sm ${toastInfo.type === "error" ? "text-flame font-bold" : "text-lime"}`}>
             {toastInfo.type === "error" ? "✕" : "✦"}
           </span>
@@ -674,7 +719,7 @@ export default function App() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-line bg-ink/85 backdrop-blur-md">
+      <header className="page-enter-header sticky top-0 z-20 border-b border-line bg-ink/85 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-sm bg-lime text-ink">
@@ -685,7 +730,11 @@ export default function App() {
               <div className="mt-1 font-mono text-[10px] tracking-[0.3em] text-muted">{t.subtitle}</div>
             </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-4">
+            <button onClick={() => switchPage("music")}
+              className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime">
+              ♫ MUSIC
+            </button>
             <div className="hidden items-center gap-6 font-mono text-[11px] tracking-[0.18em] text-muted sm:flex">
               <span>{t.titles(games.length)}</span>
               <span className="text-line">/</span>
@@ -715,7 +764,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10">
-        <section className="mb-10">
+        <section className="page-enter-hero mb-10">
           <p className="font-mono text-[11px] tracking-[0.34em] text-lime">{t.wishlistLabel}</p>
           <h1 className="mt-4 max-w-2xl font-mono text-4xl font-semibold leading-[1.05] tracking-tight text-fg sm:text-5xl">
             {t.heroTitle1}<br /><span className="text-lime">{t.heroTitle2}</span> {t.heroTitle3}
@@ -723,7 +772,7 @@ export default function App() {
           <p className="mt-5 max-w-md text-sm leading-relaxed text-muted">{t.heroDesc}</p>
         </section>
 
-        <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="page-enter-filter mb-6 flex flex-wrap items-center gap-2">
           <FilterPill active={filter === "all"} onClick={() => setFilter("all")} label={t.all} count={games.length} />
           {STATUSES.map((s) => (
             <FilterPill key={s.key} active={filter === s.key} onClick={() => setFilter(s.key)}
@@ -731,7 +780,7 @@ export default function App() {
           ))}
         </div>
 
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="page-enter-list mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-mono text-xs text-muted">⌕</span>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.searchPlaceholder}
@@ -750,16 +799,16 @@ export default function App() {
         </div>
 
         {loadingGames ? (
-          <div className="grid place-items-center rounded-sm border border-dashed border-line py-24 text-center">
+          <div className="page-enter-list grid place-items-center rounded-sm border border-dashed border-line py-24 text-center">
             <div className="size-6 animate-spin rounded-full border-2 border-lime border-t-transparent" />
             <p className="mt-3 font-mono text-xs tracking-[0.2em] text-muted">LOADING LIBRARY...</p>
           </div>
         ) : visible.length === 0 ? (
-          <div className="grid place-items-center rounded-sm border border-dashed border-line py-24 text-center">
+          <div className="page-enter-list grid place-items-center rounded-sm border border-dashed border-line py-24 text-center">
             <p className="font-mono text-xs tracking-[0.2em] text-muted">{t.noMatch}</p>
           </div>
         ) : viewMode === "list" ? (
-          <div className="flex flex-col gap-2">
+          <div className="page-enter-list flex flex-col gap-2">
             {visible.map((g) => (
               <GameRow key={g.id} game={g} t={t} lang={lang} selected={selectedId === g.id}
                 onClick={() => openGameDetail(g)}
@@ -767,7 +816,7 @@ export default function App() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="page-enter-list grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((g) => (
               <GameCard key={g.id} game={g} t={t} lang={lang} selected={selectedId === g.id}
                 onClick={() => openGameDetail(g)}
@@ -794,7 +843,7 @@ export default function App() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ isOwned }),
               })
-            } catch (e) {}
+            } catch (e) { }
           }}
           onSetHours={async (hours) => {
             setGames((prev) => prev.map((g) => g.id === selectedGame.id ? { ...g, hours } : g))
@@ -804,7 +853,7 @@ export default function App() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ hours }),
               })
-            } catch (e) {}
+            } catch (e) { }
           }}
           onSetLndLink={async (link) => {
             setGames((prev) => prev.map((g) => g.id === selectedGame.id ? { ...g, lndLink: link } : g))
@@ -814,7 +863,7 @@ export default function App() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ lndLink: link }),
               })
-            } catch (e) {}
+            } catch (e) { }
           }} />
       )}
 
@@ -862,8 +911,7 @@ function FilterPill({ active, onClick, label, count }: {
 }) {
   return (
     <button onClick={onClick}
-      className={`flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[11px] tracking-[0.14em] transition-colors ${
-        active ? "border-lime bg-lime/10 text-lime" : "border-line bg-panel text-muted hover:border-muted/50 hover:text-fg"}`}>
+      className={`flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-[11px] tracking-[0.14em] transition-colors ${active ? "border-lime bg-lime/10 text-lime" : "border-line bg-panel text-muted hover:border-muted/50 hover:text-fg"}`}>
       {label.toUpperCase()}
       <span className={active ? "text-lime/70" : "text-muted/60"}>{count}</span>
     </button>
@@ -878,8 +926,7 @@ function GameCard({ game, t, lang, selected, onClick, onStatus, onPriority, onRe
   const currentGenre = getGameGenre(game, lang)
   return (
     <article onClick={onClick}
-      className={`group relative cursor-pointer overflow-hidden rounded-sm border bg-panel transition-all ${
-        selected ? "border-lime/60 ring-1 ring-lime/20" : "border-line hover:border-muted/40"}`}>
+      className={`group relative cursor-pointer overflow-hidden rounded-sm border bg-panel transition-all ${selected ? "border-lime/60 ring-1 ring-lime/20" : "border-line hover:border-muted/40"}`}>
       <div className="relative aspect-[3/4] overflow-hidden bg-panel-2">
         <img
           src={game.cover}
@@ -894,7 +941,7 @@ function GameCard({ game, t, lang, selected, onClick, onStatus, onPriority, onRe
           loading="lazy"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
-        
+
         {/* Badges top left */}
         <div className="absolute left-3 top-3 flex flex-col gap-1.5">
           {game.isEarlyAccess && (
@@ -957,9 +1004,8 @@ function GameCard({ game, t, lang, selected, onClick, onStatus, onPriority, onRe
             {t.priorities[game.priority]}
           </button>
           <button onClick={(e) => { e.stopPropagation(); onStatus() }}
-            className={`rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.12em] transition-colors ${
-              game.status === "beaten" ? "beaten-btn" : `border-line hover:border-muted/50 ${statusColor[game.status]}`
-            }`}>
+            className={`rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.12em] transition-colors ${game.status === "beaten" ? "beaten-btn" : `border-line hover:border-muted/50 ${statusColor[game.status]}`
+              }`}>
             {game.status === "beaten"
               ? <span className="beaten-shimmer">✦ {t.statuses[game.status].toUpperCase()}</span>
               : t.statuses[game.status].toUpperCase()
@@ -977,9 +1023,8 @@ function GameRow({ game, t, lang, selected, onClick, onStatus, onPriority, onRem
   onClick: () => void; onStatus: () => void; onPriority: () => void; onRemove: () => void
 }) {
   const currentGenre = getGameGenre(game, lang)
-  const statusCls = `rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.12em] transition-colors ${
-    game.status === "beaten" ? "beaten-btn" : `border-line hover:border-muted/50 ${statusColor[game.status]}`
-  }`
+  const statusCls = `rounded-sm border px-2 py-1 font-mono text-[10px] tracking-[0.12em] transition-colors ${game.status === "beaten" ? "beaten-btn" : `border-line hover:border-muted/50 ${statusColor[game.status]}`
+    }`
   const statusContent = game.status === "beaten"
     ? <span className="beaten-shimmer">✦ {t.statuses[game.status].toUpperCase()}</span>
     : t.statuses[game.status].toUpperCase()
@@ -988,8 +1033,7 @@ function GameRow({ game, t, lang, selected, onClick, onStatus, onPriority, onRem
 
   return (
     <article onClick={onClick}
-      className={`group flex cursor-pointer gap-3 rounded-sm border bg-panel px-3 py-3 transition-all sm:items-center sm:gap-4 sm:px-4 ${
-        selected ? "border-lime/60 ring-1 ring-lime/20" : "border-line hover:border-muted/40"}`}>
+      className={`group flex cursor-pointer gap-3 rounded-sm border bg-panel px-3 py-3 transition-all sm:items-center sm:gap-4 sm:px-4 ${selected ? "border-lime/60 ring-1 ring-lime/20" : "border-line hover:border-muted/40"}`}>
 
       {/* Thumbnail */}
       <div className="size-12 shrink-0 self-center overflow-hidden rounded-sm bg-panel-2">
@@ -1050,11 +1094,11 @@ function GameRow({ game, t, lang, selected, onClick, onStatus, onPriority, onRem
           })()}
           {game.hoursPlayed != null && game.hoursPlayed > 0 && (
             <><span className="text-line">·</span>
-            <span className="shrink-0 font-semibold text-ice">▶ {game.hoursPlayed}h</span></>
+              <span className="shrink-0 font-semibold text-ice">▶ {game.hoursPlayed}h</span></>
           )}
           {game.addedAt && (
             <><span className="text-line">·</span>
-            <span className="shrink-0 text-muted/50">+{t.timeAgo(Date.now() - game.addedAt)}</span></>
+              <span className="shrink-0 text-muted/50">+{t.timeAgo(Date.now() - game.addedAt)}</span></>
           )}
         </div>
       </div>
@@ -1066,7 +1110,7 @@ function GameRow({ game, t, lang, selected, onClick, onStatus, onPriority, onRem
       </div>
 
       {/* Mobile: stacked, both stretch to same width */}
-      <div className="flex shrink-0 flex-col gap-1.5 sm:hidden" style={{width: "5.5rem"}}>
+      <div className="flex shrink-0 flex-col gap-1.5 sm:hidden" style={{ width: "5.5rem" }}>
         <button onClick={(e) => { e.stopPropagation(); onStatus() }} className={`${statusCls} w-full text-center`}>{statusContent}</button>
         <button onClick={(e) => { e.stopPropagation(); onPriority() }} className={`${priorityCls} w-full text-center`}>{t.priorities[game.priority]}</button>
       </div>
@@ -1080,10 +1124,10 @@ function TrophyIcon() {
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="trophy-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stopColor="#c8922a" />
-          <stop offset="40%"  stopColor="#f0c040" />
-          <stop offset="55%"  stopColor="#fde68a" />
-          <stop offset="70%"  stopColor="#f0c040" />
+          <stop offset="0%" stopColor="#c8922a" />
+          <stop offset="40%" stopColor="#f0c040" />
+          <stop offset="55%" stopColor="#fde68a" />
+          <stop offset="70%" stopColor="#f0c040" />
           <stop offset="100%" stopColor="#c8922a" />
         </linearGradient>
       </defs>
@@ -1238,7 +1282,7 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
     startY.current = e.clientY
     isHorizontalSwipe.current = true
     setIsDragging(true)
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -1291,9 +1335,8 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className={`group/gal relative aspect-video select-none overflow-hidden bg-panel-2 touch-pan-y ${
-        isDragging ? "cursor-grabbing" : "cursor-grab"
-      }`}
+      className={`group/gal relative aspect-video select-none overflow-hidden bg-panel-2 touch-pan-y ${isDragging ? "cursor-grabbing" : "cursor-grab"
+        }`}
     >
       {/* Horizontal Carousel Track - Real-time follow */}
       <div
@@ -1357,11 +1400,10 @@ function ImageGallery({ cover, screenshots, videos }: { cover: string; screensho
             <button
               key={i}
               onClick={(e) => { e.stopPropagation(); setIdx(i) }}
-              className={`rounded-full transition-all ${
-                i === idx
+              className={`rounded-full transition-all ${i === idx
                   ? m.type === "video" ? "h-1.5 w-4 bg-flame" : "h-1.5 w-4 bg-lime"
                   : "size-1.5 bg-muted/50 hover:bg-muted"
-              }`}
+                }`}
             />
           ))}
         </div>
@@ -1492,9 +1534,8 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
           {currentDescription && (
             <div className="relative px-5 pt-3">
               <div
-                className={`steam-about-content overflow-hidden transition-all duration-300 ${
-                  expandedDesc ? "max-h-none" : "max-h-36"
-                }`}
+                className={`steam-about-content overflow-hidden transition-all duration-300 ${expandedDesc ? "max-h-none" : "max-h-36"
+                  }`}
                 dangerouslySetInnerHTML={{ __html: currentDescription }}
               />
               {!expandedDesc && (
@@ -1521,11 +1562,10 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
                 type="button"
                 onClick={() => onToggleOwned(!game.isOwned)}
                 title={t.detailToggleOwned}
-                className={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.1em] transition-colors ${
-                  game.isOwned
+                className={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.1em] transition-colors ${game.isOwned
                     ? "border border-lime/40 bg-lime/15 text-lime hover:bg-lime/25"
                     : "border border-line bg-panel-2 text-muted hover:border-muted/50 hover:text-fg"
-                }`}
+                  }`}
               >
                 <span>{game.isOwned ? "✓" : "✕"}</span>
                 <span>{game.isOwned ? t.ownedLabel : t.unownedLabel}</span>
@@ -1690,11 +1730,10 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
               <div className="grid grid-cols-4 gap-1.5">
                 {statusOrder.map((s) => (
                   <button key={s} onClick={() => onSetStatus(s)}
-                    className={`rounded-sm border py-2 font-mono text-[10px] tracking-[0.1em] transition-colors ${
-                      game.status === s
+                    className={`rounded-sm border py-2 font-mono text-[10px] tracking-[0.1em] transition-colors ${game.status === s
                         ? s === "beaten" ? "beaten-badge text-ink font-bold" : "border-lime bg-lime/15 text-lime font-semibold"
                         : "border-line text-muted hover:text-fg"
-                    }`}>
+                      }`}>
                     {t.statuses[s]}
                   </button>
                 ))}
@@ -1706,13 +1745,12 @@ function DetailPanel({ game, t, lang, onClose, onSetStatus, onSetPriority, onRem
               <div className="grid grid-cols-3 gap-1.5">
                 {PRIORITIES.map((p) => (
                   <button key={p} onClick={() => onSetPriority(p)}
-                    className={`rounded-sm border py-2 font-mono text-[10px] tracking-[0.1em] transition-colors ${
-                      game.priority === p
+                    className={`rounded-sm border py-2 font-mono text-[10px] tracking-[0.1em] transition-colors ${game.priority === p
                         ? p === "high" ? "border-flame bg-flame/15 text-flame font-semibold"
                           : p === "medium" ? "border-ice bg-ice/15 text-ice font-semibold"
-                          : "border-muted bg-muted/15 text-fg font-semibold"
+                            : "border-muted bg-muted/15 text-fg font-semibold"
                         : "border-line text-muted hover:text-fg"
-                    }`}>
+                      }`}>
                     {t.priorities[p]}
                   </button>
                 ))}
@@ -1931,9 +1969,8 @@ function AddModal({ t, onClose, onAdd }: {
                         <button
                           type="button"
                           onMouseDown={() => pickSuggestion(s)}
-                          className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
-                            i === sugIndex ? "bg-line text-fg" : "text-muted hover:bg-panel-2 hover:text-fg"
-                          }`}
+                          className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${i === sugIndex ? "bg-line text-fg" : "text-muted hover:bg-panel-2 hover:text-fg"
+                            }`}
                         >
                           {s.thumbnail || s.cover ? (
                             <img src={s.thumbnail || s.cover} alt="" className="size-8 shrink-0 rounded-sm object-cover" />
@@ -1952,9 +1989,8 @@ function AddModal({ t, onClose, onAdd }: {
                               </div>
                             )}
                           </div>
-                          <span className={`shrink-0 font-mono text-[9px] tracking-[0.14em] font-semibold ${
-                            platform === "Steam" ? "text-[#66c0f4]" : "text-[#52b043]"
-                          }`}>
+                          <span className={`shrink-0 font-mono text-[9px] tracking-[0.14em] font-semibold ${platform === "Steam" ? "text-[#66c0f4]" : "text-[#52b043]"
+                            }`}>
                             {platform.toUpperCase()}
                           </span>
                         </button>
@@ -1978,9 +2014,8 @@ function AddModal({ t, onClose, onAdd }: {
                   key={p}
                   type="button"
                   onClick={() => { setPlatform(p); setSelectedSug(null); setShowSug(false) }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border py-2 font-mono text-[11px] tracking-[0.1em] transition-colors ${
-                    platform === p ? "border-lime bg-lime/10 text-lime" : "border-line text-muted hover:text-fg"
-                  }`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border py-2 font-mono text-[11px] tracking-[0.1em] transition-colors ${platform === p ? "border-lime bg-lime/10 text-lime" : "border-line text-muted hover:text-fg"
+                    }`}
                 >
                   {p === "Steam" && <img src={steamIconSvg} alt="" className="size-3.5 object-contain" />}
                   {p === "Xbox" && <img src={xboxLogoSvg} alt="" className="size-3.5 object-contain invert" />}
