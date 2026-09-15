@@ -410,10 +410,17 @@ export default function MusicPage({ onBack, exiting }: { onBack?: () => void; ex
         </div>
         <div className="flex items-center gap-4">
           {onBack && (
-            <button onClick={onBack}
-              className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime">
+            <a
+              href="/games"
+              onClick={(e) => {
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                  e.preventDefault()
+                  onBack()
+                }
+              }}
+              className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime cursor-pointer">
               ◀ GAMES
-            </button>
+            </a>
           )}
           <button onClick={() => setSkyNight((v) => !v)}
             className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1.5 font-mono text-[10px] tracking-[0.16em] transition-all sm:px-3 ${skyNight

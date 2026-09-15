@@ -427,7 +427,7 @@ function getInitialPage(): "games" | "music" {
       full.includes("#music") ||
       full.includes("#/music")
     ) {
-      try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+      try { sessionStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
       return "music"
     }
 
@@ -442,13 +442,13 @@ function getInitialPage(): "games" | "music" {
       full.includes("#games") ||
       full.includes("#/games")
     ) {
-      try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+      try { sessionStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
       return "games"
     }
 
-    // 3. Fallback: If URL is root "/" or "/index.html", check saved state so F5 keeps user on current page
+    // 3. Fallback: If URL is root "/" or "/index.html", check tab-isolated session state (preserves F5 per tab)
     try {
-      const saved = localStorage.getItem(PAGE_STORAGE_KEY)
+      const saved = sessionStorage.getItem(PAGE_STORAGE_KEY) || localStorage.getItem(PAGE_STORAGE_KEY)
       if (saved === "music" || saved === "games") {
         return saved
       }
@@ -464,7 +464,7 @@ export default function App() {
   const switchPage = (next: "games" | "music", updateHistory = true) => {
     if (next === page) return
     try {
-      localStorage.setItem(PAGE_STORAGE_KEY, next)
+      sessionStorage.setItem(PAGE_STORAGE_KEY, next)
     } catch {}
     setExiting(true)
     setTimeout(() => {
@@ -491,7 +491,7 @@ export default function App() {
 
       // If URL contains music in any form, lock page to "music" and clean address bar to "/music"
       if (lower.startsWith("/music") || lower.includes("music") || full.includes("music")) {
-        try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
         if (page !== "music") {
           setPage("music")
         }
@@ -503,7 +503,7 @@ export default function App() {
 
       // If URL contains games or app route, ensure page is "games"
       if (lower.startsWith("/games") || lower.includes("/app/")) {
-        try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
         if (page !== "games") {
           setPage("games")
         }
@@ -515,7 +515,7 @@ export default function App() {
 
       // Root path "/" or "/index.html": clean address bar
       try {
-        localStorage.setItem(PAGE_STORAGE_KEY, page)
+        sessionStorage.setItem(PAGE_STORAGE_KEY, page)
       } catch {}
 
       if (
@@ -638,11 +638,11 @@ export default function App() {
 
       if (isMusic) {
         setPage("music")
-        try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
         setSelectedId(null)
       } else {
         setPage("games")
-        try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
         if (!rawPath || rawPath === "/" || rawPath === "/games" || rawPath === "/games/" || rawPath.includes("index.html") || rawPath.includes("games.html")) {
           setSelectedId(null)
         } else {
@@ -880,11 +880,18 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={() => switchPage("music")}
+            <a
+              href="/music"
+              onClick={(e) => {
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                  e.preventDefault()
+                  switchPage("music")
+                }
+              }}
               onMouseEnter={() => prefetchMusicPlaylist()}
-              className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime">
+              className="font-mono text-[10px] tracking-[0.2em] text-muted transition-colors hover:text-lime cursor-pointer">
               ♫ MUSIC
-            </button>
+            </a>
             <div className="hidden items-center gap-6 font-mono text-[11px] tracking-[0.18em] text-muted sm:flex">
               <span>{t.titles(games.length)}</span>
               <span className="text-line">/</span>
