@@ -461,6 +461,42 @@ function getInitialPage(): "games" | "music" {
 export default function App() {
   const [page, setPage] = useState<"games" | "music">(getInitialPage)
   const [exiting, setExiting] = useState(false)
+  // Store initial page in ref so useEffect can access it without stale closure
+  const initialPageRef = useRef(page)
+
+  // One-time URL normalization after first mount
+  // Ensures address bar always matches the page detected from URL (handles stale sessionStorage, old redirects)
+  useEffect(() => {
+    const detectedPage = initialPageRef.current
+    const currentPath = window.location.pathname.toLowerCase()
+    const expectedPath = detectedPage === "music" ? "/music" : "/games"
+    if (currentPath === "/" || currentPath === "/index.html" ||
+        (detectedPage === "music" && !currentPath.startsWith("/music")) ||
+        (detectedPage === "games" && currentPath.startsWith("/music"))) {
+      window.history.replaceState({ page: detectedPage }, "", expectedPath)
+    }
+  }, [])
+
+  // Sync page state when user navigates with browser Back/Forward buttons
+  useEffect(() => {
+    const onPopState = (_e: PopStateEvent) => {
+      const path = window.location.pathname.toLowerCase()
+      if (path.startsWith("/music") || path.includes("music")) {
+        setPage("music")
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+      } else {
+        setPage("games")
+        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+      }
+    }
+    window.addEventListener("popstate", onPopState)
+    return () => window.removeEventListener("popstate", onPopState)
+  }, [])
+
+  // Prefetch music playlist quietly in background
+  useEffect(() => {
+    prefetchMusicPlaylist()
+  }, [])
 
   const switchPage = (next: "games" | "music", updateHistory = true) => {
     if (next === page) return
@@ -480,61 +516,6 @@ export default function App() {
       }
     }, 240)
   }
-
-  // Ensure URL is clean and synchronized with current view
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const path = window.location.pathname
-      const lower = path.toLowerCase()
-      const search = window.location.search.toLowerCase()
-      const hash = window.location.hash.toLowerCase()
-      const full = (lower + search + hash).toLowerCase()
-
-      // If URL contains music in any form, lock page to "music" and clean address bar to "/music"
-      if (lower.startsWith("/music") || lower.includes("music") || full.includes("music")) {
-        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
-        if (page !== "music") {
-          setPage("music")
-        }
-        if (path !== "/music") {
-          window.history.replaceState({ page: "music" }, "", "/music")
-        }
-        return
-      }
-
-      // If URL contains games or app route, ensure page is "games"
-      if (lower.startsWith("/games") || lower.includes("/app/")) {
-        try { sessionStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
-        if (page !== "games") {
-          setPage("games")
-        }
-        if (lower === "/games/" || lower === "/games.html") {
-          window.history.replaceState({ page: "games" }, "", "/games")
-        }
-        return
-      }
-
-      // Root path "/" or "/index.html": clean address bar
-      try {
-        sessionStorage.setItem(PAGE_STORAGE_KEY, page)
-      } catch {}
-
-      if (
-        !path ||
-        path === "/" ||
-        lower === "/index.html" ||
-        lower.endsWith("/index.html")
-      ) {
-        const targetUrl = page === "music" ? "/music" : "/games"
-        window.history.replaceState({ page }, "", targetUrl)
-      }
-    }
-  }, [page])
-
-  // Prefetch music playlist quietly in background so Music page opens instantly
-  useEffect(() => {
-    prefetchMusicPlaylist()
-  }, [])
 
   const [games, setGames] = useState<Game[]>([])
   const [loadingGames, setLoadingGames] = useState(true)

@@ -27,6 +27,9 @@
               window.history.replaceState({ page: 'games' }, '', '/games');
             }
           }
+          if (!f.includes('music')) {
+            try { fetch('/music', { cache: 'reload' }).catch(function(){}); } catch(e){}
+          }
         } catch(e) {}
       })();
     </script>

@@ -10,13 +10,17 @@ const indexHtmlPath = path.join(distDir, 'index.html')
 if (fs.existsSync(indexHtmlPath)) {
   const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8')
 
-  // Clean up any old subdirectories if they exist to prevent static web servers from issuing directory redirects
+  // Remove any old subdirectories and stale route HTML files to prevent Render/CDN from serving
+  // cached old HTML directly (bypassing the rewrite rule /* -> /index.html which always returns latest)
   for (const route of ['music', 'games']) {
     const routeDir = path.join(distDir, route)
     if (fs.existsSync(routeDir)) {
       fs.rmSync(routeDir, { recursive: true, force: true })
     }
-    fs.writeFileSync(path.join(distDir, `${route}.html`), indexHtml, 'utf8')
+    const routeHtml = path.join(distDir, `${route}.html`)
+    if (fs.existsSync(routeHtml)) {
+      fs.rmSync(routeHtml, { force: true })
+    }
   }
 
   // 404.html and 200.html fallbacks for static hosting (Render, GitHub Pages, Surge, Netlify)
