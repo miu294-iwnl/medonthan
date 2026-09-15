@@ -24,7 +24,13 @@ export default function NoDevTools({ lang, setLang, onRetry }: NoDevToolsProps) 
     } else {
       let returnUrl = "/games";
       try {
-        returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games";
+        const saved = sessionStorage.getItem("medonthan_return_url");
+        if (saved && !saved.includes("nodevtools")) {
+          returnUrl = saved;
+        } else {
+          const page = localStorage.getItem("medonthan_active_page");
+          returnUrl = page === "music" ? "/music" : "/games";
+        }
       } catch {}
       window.location.href = returnUrl;
     }

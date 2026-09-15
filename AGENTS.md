@@ -13,11 +13,16 @@ Tài liệu này được biên soạn đầy đủ và chi tiết nhất nhằm
 ### Kiến trúc Monorepo
 Dự án được tổ chức theo cấu trúc phân tách rõ ràng giữa Client và Server trong cùng một kho lưu trữ:
 - **Thư mục gốc (`/` và `src/`):** Ứng dụng Frontend SPA xây dựng bằng **React 19**, **TypeScript 5.7**, **Vite 8**, **Tailwind CSS v4**.
-- **Thư mục `server/`:** Ứng dụng Backend RESTful API xây dựng bằng **Node.js 22 (ES Modules)**, **Express 4.21**, **Prisma ORM 6.4**, kết nối cơ sở dữ liệu **PostgreSQL**.
+- **Thư mục `server/`:** Ứng dụng Backend RESTful API xây dựng bằng **Node.js 22 (ES Modules)**, **Express 4.21**, **Prisma ORM 6.4**.
+
+### Kiến trúc Cơ sở Dữ liệu Kép (Dual Database Engine)
+Hệ thống hỗ trợ 2 chế độ cơ sở dữ liệu linh hoạt, tự động chuyển đổi thông minh:
+1. **Production (PostgreSQL qua Prisma ORM):** Khi có biến môi trường `DATABASE_URL`, ứng dụng kết nối trực tiếp đến PostgreSQL (Render, Neon, Supabase...) với đầy đủ tính năng pool kết nối, giao dịch và hiệu năng cao.
+2. **Local Zero-Config (SQLite qua module chuẩn `node:sqlite`):** Khi biến môi trường `DATABASE_URL` không tồn tại (chạy cục bộ mới clone về), `server/lib/prisma.js` tự động chuyển sang cơ sở dữ liệu SQLite cục bộ tại `server/prisma/dev.db`. Hệ thống tự động tạo cấu trúc bảng, seed 16 game mẫu cùng tài khoản quản trị viên. Lập trình viên có thể khởi chạy và trải nghiệm toàn bộ tính năng ngay lập tức mà không cần cài đặt hoặc chạy dịch vụ PostgreSQL.
 
 ### Kiến trúc Triển khai (Deployment) trên Render.com
 Hệ thống được thiết kế để triển khai thành **3 dịch vụ độc lập** trên Render:
-1. **PostgreSQL Database:** Lưu trữ bảng `Game`.
+1. **PostgreSQL Database:** Lưu trữ bảng `Game` và `AdminAuth`.
 2. **Web Service (Backend Node.js):** Chạy code trong thư mục `server/`, kết nối DB qua chuỗi `DATABASE_URL` nội bộ.
 3. **Static Site (Frontend Vite):** Build thư mục `dist/` từ thư mục gốc. Sử dụng tính năng **Rewrites** trên Render Dashboard để chuyển tiếp `/api/*` sang domain của Web Service.
 
@@ -37,7 +42,7 @@ Component trung tâm điều phối toàn bộ luồng trang chính (Games Backl
 - `page` (`"games" | "music"`): Trạng thái trang hiện tại. Khởi tạo qua hàm `getInitialPage()`:
   - Ưu tiên 1: Đọc từ đường dẫn `window.location.pathname`, `hash`, và `search` (hỗ trợ `/music`, `/music/`, `/music.html`, `#/music`, `?page=music`, `/games`, `/app/...`). Đảm bảo khi người dùng gõ URL trực tiếp hoặc mở liên kết từ ngoài vào sẽ giữ nguyên trang mong muốn 100%.
   - Ưu tiên 2: Nếu đường dẫn là root `/` hoặc `/index.html` (do CDN / máy chủ tĩnh phục vụ khi F5), đọc từ `localStorage.getItem("medonthan_active_page")` để giữ nguyên trang người dùng đang xem, chống việc bị văng về trang mặc định khi F5.
-- Tự động chuẩn hóa URL (Clean URL): `useEffect` theo dõi `page`, nếu URL đang là `/` hoặc `/index.html` hoặc `*.html`, ngay lập tức dùng `window.history.replaceState` cập nhật thành `/games` (hoặc `/music`), giúp thanh địa chỉ trình duyệt luôn hiển thị chuẩn đẹp (`/games` hoặc `/music`).
+- Tự động chuẩn hóa URL (Clean URL): `useEffect` theo dõi `page`, nếu URL đang là `/`, `/index.html`, `*.html`, hoặc có dấu gạch chéo cuối (`/music/`, `/games/`), ngay lập tức dùng `window.history.replaceState` cập nhật thành `/games` (hoặc `/music`), giúp thanh địa chỉ trình duyệt luôn hiển thị chuẩn đẹp (`/games` hoặc `/music`), đồng thời bảo toàn nguyên vẹn các deep link chi tiết game `/app/...` và `/games/...`.
 - Script `scripts/postbuild.js`: Tự động sao chép `dist/index.html` thành `dist/music/index.html`, `dist/games/index.html`, `dist/music.html`, `dist/games.html`, và `dist/404.html`. Giúp mọi nền tảng máy chủ tĩnh (Render Static Site, Netlify, Vercel, GitHub Pages) đều phục vụ trực tiếp HTTP 200 cho `/music` và `/games` mà không bao giờ bị redirect hay văng về trang mặc định.
 - `exiting` (`boolean`): Cờ kích hoạt animation chuyển trang mượt mà trước khi component unmount.
 - `games` (`Game[]`): Danh sách các bản ghi game nạp từ backend.
@@ -201,21 +206,19 @@ Component không gian âm nhạc Spotify và bầu trời sao đêm:
 Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn người dùng mở DevTools hoặc Inspect mã nguồn:
 
 1. **`index.html`:**
-   - Lắng nghe sự kiện `contextmenu`: Ngăn chặn chuột phải.
+   - Kiểm tra môi trường cục bộ (`localhost`, `127.0.0.1`, `*.local`): Tự động tắt toàn bộ bẫy DevTools và cho phép chuột phải / shortcut phục vụ quá trình debug, kiểm thử của lập trình viên.
+   - Lắng nghe sự kiện `contextmenu`: Ngăn chặn chuột phải trên môi trường production.
    - Lắng nghe sự kiện `keydown`: Chặn các phím `F12`, `Ctrl+Shift+I/J/C`, `Meta+Alt+I/J/C`, `Ctrl+U`, `Ctrl+S`.
-   - **Debugger Timing Trap:** Vòng lặp `setInterval(..., 120)` thực thi câu lệnh `debugger;` và tính thời gian thực thi:
-     ```javascript
-     var t0 = performance.now();
-     debugger;
-     var t1 = performance.now();
-     if (t1 - t0 > 80) blockAccess();
-     ```
-     Nếu DevTools đang mở, câu lệnh `debugger` sẽ làm tạm dừng JavaScript khiến `t1 - t0 > 80ms`, hàm `blockAccess()` sẽ ngay lập tức xóa trắng DOM (`document.documentElement.innerHTML = ''`) và chuyển hướng sang `/nodevtools.html`.
-2. **`nodevtools.html`:**
-   - Trang HTML tĩnh độc lập (được khai báo trong `vite.config.ts` mục `rollupOptions.input`).
-   - Giao diện phong cách Hacker Terminal cảnh báo vi phạm, hiển thị đồng hồ thời gian thực và trạng thái phát hiện DevTools mở/đóng.
-3. **`src/nodevtools.tsx`:**
-   - Mã nguồn TSX tích hợp thư viện `devtools-detector` với phương thức `addListener` để lắng nghe khi DevTools được đóng lại sẽ tự động chuyển hướng người dùng về trang chủ `/`.
+   - **Debugger Timing Trap thông minh (Chống False Positive):**
+     - Chỉ bắt đầu chạy sau khi sự kiện `window.load` hoàn tất kèm độ trễ 2.5s để trình duyệt kết thúc quá trình biên dịch JIT và parse CSS/JS ban đầu (chống gián đoạn main thread lúc cold start).
+     - Đo chu kỳ `setInterval(..., 400)` với lệnh `debugger;`.
+     - Ngưỡng phát hiện nâng lên `t1 - t0 > 160ms` và bắt buộc đạt tối thiểu 2 lần kiểm tra liên tiếp (`consecutiveHits >= 2`) mới kích hoạt `blockAccess()`.
+     - Khi kích hoạt, hàm `blockAccess()` tự động lưu đường dẫn hiện tại vào `sessionStorage.setItem('medonthan_return_url', window.location.pathname + window.location.search + window.location.hash)` trước khi chuyển hướng sang `/nodevtools.html`.
+2. **`src/main.tsx`:**
+   - Bọc thư viện `devtools-detector` trong điều kiện `if (!isLocal && !import.meta.env.DEV)`.
+   - Lưu chuẩn xác `sessionStorage.setItem('medonthan_return_url', ...)` trước khi `window.location.replace('/nodevtools.html')`.
+3. **`nodevtools.html` & `src/nodevtools.tsx`:**
+   - Khi DevTools được đóng lại (hoặc người dùng bấm "Quay lại"), hàm `getReturnUrl()` đọc `sessionStorage.getItem('medonthan_return_url')`. Nếu rỗng, tiếp tục đọc `localStorage.getItem('medonthan_active_page')` (nếu là `'music'` sẽ quay về `/music`, ngược lại `/games`). Đảm bảo người dùng truy cập trực tiếp `/music` không bao giờ bị văng về trang mặc định.
 
 ---
 
@@ -254,7 +257,20 @@ Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn
 ---
 
 ### 3.2. `server/lib/prisma.js`
-- Khởi tạo đối tượng `PrismaClient` dạng singleton và gắn vào `globalThis` ở môi trường dev để tránh cạn kiệt connection pool khi reload server nhiều lần.
+- **Khởi tạo Singleton & Chuyển đổi Cơ sở dữ liệu Kép:**
+  - **Trường hợp 1 (Có `process.env.DATABASE_URL`):** Khởi tạo đối tượng `PrismaClient` chính thức để kết nối PostgreSQL trên Render / Supabase / Neon, áp dụng mô hình singleton trên `globalThis` ở môi trường dev để tránh cạn kiệt connection pool khi reload server nhiều lần.
+  - **Trường hợp 2 (Không có `DATABASE_URL`):** Tự động nạp module `node:sqlite` của Node.js 22 và khởi tạo SQLite adapter tại đường dẫn `server/prisma/dev.db`.
+    - Tự động chạy lệnh `CREATE TABLE IF NOT EXISTS` cho cả 2 bảng `"Game"` và `"AdminAuth"`.
+    - Cung cấp Adapter Proxy giả lập 100% cú pháp API của Prisma Client:
+      - `prisma.game.count()`
+      - `prisma.game.findMany({ where, orderBy })` (hỗ trợ điều kiện `OR` và `id`)
+      - `prisma.game.findFirst({ where })`
+      - `prisma.game.create({ data })` (tự sinh UUID bằng `crypto.randomUUID()`)
+      - `prisma.game.update({ where, data })`
+      - `prisma.game.delete({ where })`
+      - `prisma.adminAuth.findUnique({ where })`, `create`, `update`, `upsert`
+      - `prisma.$queryRawUnsafe(...)` & `prisma.$executeRawUnsafe(...)`
+    - Chuẩn hóa kiểu dữ liệu: Chuyển đổi tự động các trường số nguyên boolean (`isOwned`, `isEarlyAccess`) từ SQLite (0/1) sang chuẩn JavaScript (`true`/`false`), đảm bảo các controller không cần chỉnh sửa bất kỳ dòng mã nào.
 
 ---
 
@@ -416,3 +432,11 @@ Khi làm việc trên codebase này, mọi AI Agent **BẮT BUỘC** phải tuâ
 7. **Cơ chế Proxy API khi triển khai riêng biệt:**
    - Tất cả các lệnh gọi API từ client đều dùng đường dẫn tương đối `/api/...`.
    - Khi Frontend chạy dạng Static Site trên Render, phải luôn nhắc người dùng cấu hình quy tắc **Rewrite** (`/api/*` -> `https://<backend-service>.onrender.com/api/*`) trên Render Dashboard thay vì sửa code cứng thành absolute URL.
+8. **Duy trì Tính Tương Thích Kép của Database (Dual Database Engine):**
+   - Mọi thay đổi về cấu trúc bảng hoặc truy vấn dữ liệu mới phải được đồng bộ song song ở cả 2 tầng:
+     - Tầng PostgreSQL: Cập nhật trong `server/prisma/schema.prisma`.
+     - Tầng SQLite Adapter: Cập nhật câu lệnh `CREATE TABLE` và logic parse/format trong `server/lib/prisma.js`.
+   - Tuyệt đối không xóa bỏ cơ chế SQLite fallback để đảm bảo người dùng mới clone repo luôn có thể chạy ngay lập tức mà không gặp lỗi thiếu database.
+9. **Bảo toàn Định Tuyến SPA và Deep Link khi Cấu hình Bảo vệ:**
+   - Khi nâng cấp hoặc sửa đổi các cơ chế chống DevTools hoặc chặn truy cập, luôn phải lưu trữ URL nguồn hiện tại qua `sessionStorage.setItem('medonthan_return_url', ...)` trước khi chuyển hướng sang trang hạn chế.
+   - Khi người dùng trở lại, hàm khôi phục phải ưu tiên trả về đúng URL đã lưu hoặc route active trong `localStorage` (`/music`, `/games`, `/app/...`), tuyệt đối không được redirect cứng về `/` hay `/games` làm gián đoạn trải nghiệm truy cập trực tiếp của người dùng.

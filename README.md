@@ -34,10 +34,20 @@ Medonthan là ứng dụng web cá nhân cao cấp dùng để quản lý danh s
 - **Mã hóa an toàn trong Database:** Mật khẩu được mã hóa một chiều bằng thuật toán `scrypt` với muối ngẫu nhiên (salt 16-byte) và lưu trữ trong bảng `AdminAuth` của PostgreSQL.
 - **Tự động khởi tạo:** Lần đầu sử dụng popup sẽ tự động chuyển sang giao diện tạo mật khẩu chủ nếu DB chưa có mật khẩu. Ngoài ra cũng hỗ trợ cấu hình sẵn qua biến môi trường `ADMIN_PASSWORD` trong `server/.env`.
 
-### Cơ chế chống can thiệp (Anti-DevTools Protection)
-- Vô hiệu hóa menu chuột phải (Context Menu).
-- Chặn toàn bộ tổ hợp phím tắt mở công cụ nhà phát triển (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S).
-- Bẫy thời gian thực thi (Debugger timing trap) phát hiện mở Console / DevTools và tự động chuyển hướng sang trang cảnh báo chuyên dụng `/nodevtools.html`.
+### Cơ sở dữ liệu kép linh hoạt (Zero-Config Dual Database Engine)
+- **Chạy cục bộ tức thì (Zero Config):** Tự động phát hiện môi trường: nếu chưa cấu hình `DATABASE_URL`, hệ thống tự động khởi tạo cơ sở dữ liệu SQLite cục bộ (`server/prisma/dev.db`) bằng module chuẩn `node:sqlite` của Node.js 22, tự động tạo bảng và nạp 16 game mẫu cùng tài khoản quản trị mà không cần cài đặt PostgreSQL.
+- **Tương thích 100% Production PostgreSQL:** Khi có chuỗi `DATABASE_URL` (trên Render, Neon, Supabase hoặc PostgreSQL cục bộ), hệ thống tự động chuyển sang `PrismaClient` chính thức để khai thác toàn bộ sức mạnh của PostgreSQL.
+
+### Cơ chế chống can thiệp thông minh (Smart Anti-DevTools Protection)
+- **Tự động tắt trên môi trường phát triển:** Nhận diện `localhost`, `127.0.0.1` và dev mode để tắt toàn bộ bẫy DevTools, giúp lập trình viên thoải mái debug, kiểm thử.
+- **Chống cảnh báo giả khi mở trang (Anti-False-Positive):** Bẫy thời gian thực thi (Debugger Timing Trap) trên production chỉ kích hoạt sau khi sự kiện `window.load` hoàn tất kèm độ trễ 2.5 giây khởi động, với ngưỡng đo `160ms` và bắt buộc 2 lần liên tiếp để tránh việc CPU lag lúc cold start gián đoạn trải nghiệm người dùng.
+- **Bảo toàn Return URL 2 tầng:** Luôn ghi nhớ chính xác đường dẫn người dùng đang truy cập (`/music`, `/games`, `/app/...`) qua `sessionStorage` và `localStorage`, đảm bảo khi DevTools đóng hoặc khi reload không bao giờ bị văng về trang mặc định.
+- Chặn chuột phải (Context Menu) và toàn bộ tổ hợp phím tắt mở công cụ nhà phát triển (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S) trên môi trường production.
+
+### Định tuyến SPA & Chuẩn hóa Clean URL
+- Tự động chuẩn hóa các biến thể đường dẫn (`/music/`, `/games/`, `*.html`, `/`) thành Clean URL (`/music`, `/games`) bằng `history.replaceState`.
+- Giữ nguyên trạng thái trang khi tải lại (F5 / Reload) và hỗ trợ mở trực tiếp deep link chi tiết game (`/app/...`, `/games/...`).
+- Kịch bản `scripts/postbuild.js` tự động sinh các thư mục route tĩnh (`dist/music/index.html`, `dist/games/index.html`, `dist/404.html`) để phục vụ HTTP 200 trực tiếp trên mọi nền tảng static hosting.
 
 ### Đa ngôn ngữ (Bilingual Support)
 - Hỗ trợ song ngữ Tiếng Việt và Tiếng Anh trên toàn bộ giao diện và mô tả nội dung.
@@ -97,11 +107,14 @@ medonthan/
 │   │   └── spotifyPlaylistService.js # Lấy metadata & danh sách bài hát Spotify
 │   ├── prisma/                 # Cơ sở dữ liệu Prisma
 │   │   ├── schema.prisma       # Định nghĩa bảng Game và AdminAuth (PostgreSQL)
+│   │   ├── dev.db              # Database SQLite cục bộ (tự động tạo khi không có DATABASE_URL)
 │   │   └── seed.js             # Dữ liệu khởi tạo mẫu khi DB trống
 │   ├── lib/
-│   │   └── prisma.js           # Khởi tạo singleton PrismaClient
+│   │   └── prisma.js           # Khởi tạo singleton PrismaClient (PostgreSQL & SQLite Adapter)
 │   ├── .env.example            # Mẫu biến môi trường backend
 │   └── index.js                # Server chính Express, CORS & phục vụ static dist/
+├── scripts/
+│   └── postbuild.js            # Sao chép dist tĩnh cho /music, /games, 404.html, 200.html
 ├── index.html                  # HTML Shell chính, tích hợp kịch bản chặn DevTools
 ├── nodevtools.html             # Trang cảnh báo hạn chế truy cập khi mở DevTools
 ├── package.json                # Dependencies & script quản lý dự án
@@ -119,7 +132,7 @@ medonthan/
 ### Yêu cầu tiên quyết
 - **Node.js:** Phiên bản 22 LTS trở lên (khuyên dùng Node 22).
 - **Trình quản lý gói:** `pnpm` (phiên bản 10.x) hoặc `npm`.
-- **Cơ sở dữ liệu:** PostgreSQL (cục bộ hoặc cloud như Neon, Supabase, Render PostgreSQL).
+- **Cơ sở dữ liệu:** *Tùy chọn*. Mặc định hệ thống tự động chạy **SQLite cục bộ** không cần cài đặt bất kỳ cơ sở dữ liệu nào. Nếu muốn dùng PostgreSQL, bạn có thể kết nối cơ sở dữ liệu cục bộ hoặc cloud (Neon, Supabase, Render).
 
 ### Bước 1: Cài đặt Dependencies
 Cài đặt thư viện cho cả root (Frontend) và thư mục `server/` (Backend):
@@ -133,7 +146,7 @@ pnpm install
 cd ..
 ```
 
-### Bước 2: Cấu hình biến môi trường
+### Bước 2: Cấu hình biến môi trường (Tùy chọn)
 Tạo file `server/.env` từ file mẫu `server/.env.example`:
 ```bash
 cd server
@@ -142,7 +155,10 @@ cp .env.example .env
 Nội dung file `server/.env`:
 ```env
 PORT=3001
+
+# Tùy chọn: Nếu để trống, server tự động dùng SQLite (server/prisma/dev.db)
 DATABASE_URL=postgresql://user:password@localhost:5432/medonthan
+
 STEAM_API_KEY=your_steam_web_api_key_here
 STEAM_VANITY_URL=mused29
 MUSIC_API_SPOTIFYPLAYLIST=https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
@@ -157,14 +173,16 @@ ADMIN_PASSWORD=
 > **Gợi ý:** Để dùng tính năng đồng bộ giờ chơi từ tài khoản Steam cá nhân, bạn có thể tạo API Key miễn phí tại [Steam Community Developer](https://steamcommunity.com/dev/apikey).
 
 ### Bước 3: Khởi tạo Cơ sở dữ liệu
-Đồng bộ schema lên PostgreSQL và khởi tạo Prisma Client:
-```bash
-cd server
-npx prisma db push
-npx prisma generate
-cd ..
-```
-*(Nếu cơ sở dữ liệu mới tinh, hệ thống sẽ tự động chạy seed danh sách game tuyển chọn ban đầu khi server khởi động lần đầu).*
+- **Cách 1 - Chạy nhanh với SQLite (Mặc định - Zero Config):**
+  Không cần làm gì thêm! Khi khởi động server, hệ thống tự động tạo file `server/prisma/dev.db`, khởi tạo cấu trúc bảng và nạp sẵn 16 game mẫu cùng mật khẩu quản trị viên.
+- **Cách 2 - Kết nối PostgreSQL:**
+  Nếu bạn đã cấu hình chuỗi `DATABASE_URL` trong `server/.env`:
+  ```bash
+  cd server
+  npx prisma db push
+  npx prisma generate
+  cd ..
+  ```
 
 ### Bước 4: Khởi chạy dự án
 Mở 2 cửa sổ terminal:
@@ -189,7 +207,7 @@ Mở 2 cửa sổ terminal:
 | Nhóm | Phương thức | Endpoint | Chức năng |
 | :--- | :--- | :--- | :--- |
 | **Games** | `GET` | `/api/games` | Lấy danh sách toàn bộ game trong kho lưu trữ |
-| | `POST` | `/api/games` | Thêm game mới (tự động nạp chi tiết từ Steam/Xbox) |
+| | `POST` | `/api/games` | Thêm game mới (yêu cầu xác thực token quản trị viên) |
 | | `PUT` | `/api/games/:id` | Cập nhật thông tin game (trạng thái, độ ưu tiên, giờ chơi...) |
 | | `DELETE` | `/api/games/:id` | Xóa game khỏi kho lưu trữ |
 | | `GET` | `/api/search?q={keyword}&platform={platform}` | Tìm kiếm trò chơi từ kho Steam Store hoặc Xbox |
@@ -197,6 +215,9 @@ Mở 2 cửa sổ terminal:
 | | `GET` | `/api/steam/stats` | Lấy tổng giờ chơi và thông tin hồ sơ tài khoản Steam |
 | **Music** | `GET` | `/api/music/playlist` | Lấy thông tin playlist và danh sách bài hát Spotify hiện tại |
 | | `POST` | `/api/music/playlist` | Cập nhật URL playlist Spotify mới vào hệ thống |
+| **Auth** | `GET` | `/api/auth/status` | Kiểm tra trạng thái đã khởi tạo mật khẩu & token hợp lệ |
+| | `POST` | `/api/auth/verify` | Xác thực mật khẩu quản trị và cấp token truy cập |
+| | `POST` | `/api/auth/setup` | Khởi tạo mật khẩu quản trị viên ban đầu |
 | **Hệ thống**| `GET` | `/health` | Kiểm tra trạng thái hoạt động (Health Check) của server |
 
 ---

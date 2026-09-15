@@ -22,16 +22,26 @@ function StandaloneNoDevTools() {
     } catch {}
   }, [lang])
 
+  const getReturnUrl = () => {
+    try {
+      const saved = sessionStorage.getItem("medonthan_return_url")
+      if (saved && !saved.includes("nodevtools")) {
+        return saved
+      }
+      const page = localStorage.getItem("medonthan_active_page")
+      if (page === "music") return "/music"
+      return "/games"
+    } catch {
+      return "/games"
+    }
+  }
+
   useEffect(() => {
     const handleDetector = (isOpen: boolean) => {
       setIsStillOpen(isOpen)
       if (!isOpen) {
         // Devtools was closed, redirect back to the page the user was on
-        let returnUrl = "/games"
-        try {
-          returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games"
-        } catch {}
-        window.location.replace(returnUrl)
+        window.location.replace(getReturnUrl())
       }
     }
 
@@ -43,11 +53,7 @@ function StandaloneNoDevTools() {
 
   const handleRetry = () => {
     if (!isStillOpen) {
-      let returnUrl = "/games"
-      try {
-        returnUrl = sessionStorage.getItem("medonthan_return_url") || "/games"
-      } catch {}
-      window.location.replace(returnUrl)
+      window.location.replace(getReturnUrl())
     } else {
       window.location.reload()
     }

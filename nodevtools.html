@@ -407,21 +407,44 @@
         updateUI();
       }
 
-      var isDevToolsOpen = true;
+      var hostname = window.location.hostname;
+      var isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local') || hostname === '[::1]';
+      var isDevToolsOpen = !isLocal;
+
+      function getReturnUrl() {
+        try {
+          var saved = sessionStorage.getItem('medonthan_return_url');
+          if (saved && !saved.includes('nodevtools')) {
+            return saved;
+          }
+          var page = localStorage.getItem('medonthan_active_page');
+          return page === 'music' ? '/music' : '/games';
+        } catch(e) {
+          return '/games';
+        }
+      }
 
       // Realtime DevTools status checker
-      setInterval(function() {
-        var t0 = performance.now();
-        debugger;
-        var t1 = performance.now();
-        if (t1 - t0 > 80) {
-          isDevToolsOpen = true;
-        } else {
-          isDevToolsOpen = false;
-        }
-        document.getElementById('txt-status').textContent = isDevToolsOpen ? translations[currentLang].statusOpen : translations[currentLang].statusClosed;
-        document.getElementById('txt-status').style.color = isDevToolsOpen ? 'var(--color-flame)' : 'var(--color-lime)';
-      }, 500);
+      if (!isLocal) {
+        setInterval(function() {
+          var t0 = performance.now();
+          debugger;
+          var t1 = performance.now();
+          if (t1 - t0 > 160) {
+            isDevToolsOpen = true;
+          } else {
+            isDevToolsOpen = false;
+          }
+          document.getElementById('txt-status').textContent = isDevToolsOpen ? translations[currentLang].statusOpen : translations[currentLang].statusClosed;
+          document.getElementById('txt-status').style.color = isDevToolsOpen ? 'var(--color-flame)' : 'var(--color-lime)';
+        }, 500);
+      } else {
+        isDevToolsOpen = false;
+        setTimeout(function() {
+          document.getElementById('txt-status').textContent = translations[currentLang].statusClosed;
+          document.getElementById('txt-status').style.color = 'var(--color-lime)';
+        }, 100);
+      }
 
       function updateClock() {
         document.getElementById('terminal-time').textContent = new Date().toLocaleTimeString();
@@ -431,10 +454,7 @@
       setLanguage(currentLang);
 
       function handleRetry() {
-        var returnUrl = '/games';
-        try {
-          returnUrl = sessionStorage.getItem('medonthan_return_url') || '/games';
-        } catch(e) {}
+        var returnUrl = getReturnUrl();
         if (!isDevToolsOpen) {
           window.location.replace(returnUrl);
         } else {
@@ -443,11 +463,7 @@
       }
 
       function handleReturnHome() {
-        var returnUrl = '/games';
-        try {
-          returnUrl = sessionStorage.getItem('medonthan_return_url') || '/games';
-        } catch(e) {}
-        window.location.replace(returnUrl);
+        window.location.replace(getReturnUrl());
       }
     </script>
   </body>

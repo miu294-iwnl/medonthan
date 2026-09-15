@@ -7,9 +7,18 @@
     <title><!-- figma:title --></title>
     <script>
       (function() {
+        var hostname = window.location.hostname;
+        var isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local') || hostname === '[::1]';
+        if (isLocal) {
+          return;
+        }
+
         function blockAccess() {
           try {
-            sessionStorage.setItem('medonthan_return_url', window.location.pathname + window.location.search + window.location.hash);
+            var currentTarget = window.location.pathname + window.location.search + window.location.hash;
+            if (currentTarget && !currentTarget.includes('nodevtools')) {
+              sessionStorage.setItem('medonthan_return_url', currentTarget);
+            }
             document.documentElement.innerHTML = '';
           } catch(e){}
           window.location.replace('/nodevtools.html');
@@ -37,15 +46,32 @@
           }
         }, true);
 
-        // Debugger Timing Trap
-        setInterval(function() {
-          var t0 = performance.now();
-          debugger;
-          var t1 = performance.now();
-          if (t1 - t0 > 80) {
-            blockAccess();
-          }
-        }, 120);
+        // Robust Debugger Timing Trap:
+        // Wait until window load + 2.5s warmup to avoid cold-start false positives during resource compilation
+        function startTimingTrap() {
+          var consecutiveHits = 0;
+          setInterval(function() {
+            var t0 = performance.now();
+            debugger;
+            var t1 = performance.now();
+            if (t1 - t0 > 160) {
+              consecutiveHits++;
+              if (consecutiveHits >= 2) {
+                blockAccess();
+              }
+            } else {
+              consecutiveHits = 0;
+            }
+          }, 400);
+        }
+
+        if (document.readyState === 'complete') {
+          setTimeout(startTimingTrap, 2500);
+        } else {
+          window.addEventListener('load', function() {
+            setTimeout(startTimingTrap, 2500);
+          });
+        }
       })();
     </script>
   </head>

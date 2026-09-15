@@ -487,7 +487,7 @@ export default function App() {
 
       const path = window.location.pathname
       const lower = path.toLowerCase()
-      // If path is root "/" or "/index.html" or "*.html", clean up address bar with /games or /music
+      // If path is root "/" or "/index.html", "*.html", or has trailing slash, clean up address bar with /games or /music
       if (
         !path ||
         path === "/" ||
@@ -496,7 +496,9 @@ export default function App() {
         lower === "/music.html" ||
         lower.endsWith("/music.html") ||
         lower === "/games.html" ||
-        lower.endsWith("/games.html")
+        lower.endsWith("/games.html") ||
+        lower === "/music/" ||
+        lower === "/games/"
       ) {
         const targetUrl = page === "music" ? "/music" : "/games"
         window.history.replaceState({ page }, "", targetUrl)
