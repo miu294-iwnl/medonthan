@@ -10,6 +10,28 @@
     <title><!-- figma:title --></title>
     <script>
       (function() {
+        try {
+          localStorage.removeItem('medonthan_active_page');
+          var p = window.location.pathname.toLowerCase();
+          var s = window.location.search.toLowerCase();
+          var h = window.location.hash.toLowerCase();
+          var f = (p + s + h).toLowerCase();
+          if (f.includes('music')) {
+            sessionStorage.setItem('medonthan_active_page', 'music');
+            if (p !== '/music') {
+              window.history.replaceState({ page: 'music' }, '', '/music');
+            }
+          } else if (f.includes('games') || p.includes('/app/')) {
+            sessionStorage.setItem('medonthan_active_page', 'games');
+            if (p === '/games/' || p === '/games.html') {
+              window.history.replaceState({ page: 'games' }, '', '/games');
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <script>
+      (function() {
         var hostname = window.location.hostname;
         var isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local') || hostname === '[::1]';
         if (isLocal) {

@@ -448,7 +448,8 @@ function getInitialPage(): "games" | "music" {
 
     // 3. Fallback: If URL is root "/" or "/index.html", check tab-isolated session state (preserves F5 per tab)
     try {
-      const saved = sessionStorage.getItem(PAGE_STORAGE_KEY) || localStorage.getItem(PAGE_STORAGE_KEY)
+      localStorage.removeItem(PAGE_STORAGE_KEY)
+      const saved = sessionStorage.getItem(PAGE_STORAGE_KEY)
       if (saved === "music" || saved === "games") {
         return saved
       }
