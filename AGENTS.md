@@ -203,22 +203,20 @@ Component không gian âm nhạc Spotify và bầu trời sao đêm:
 ---
 
 ### 2.7. Hệ thống Chống DevTools & Bảo vệ Mã nguồn
-Dự án được tích hợp cơ chế bảo vệ nâng cao nhằm ngăn chặn người dùng mở DevTools hoặc Inspect mã nguồn:
+Dự án được tích hợp cơ chế bảo vệ an toàn chuẩn mực nhằm ngăn chặn việc mở DevTools hoặc Inspect mã nguồn:
 
 1. **`index.html`:**
-   - Kiểm tra môi trường cục bộ (`localhost`, `127.0.0.1`, `*.local`): Tự động tắt toàn bộ bẫy DevTools và cho phép chuột phải / shortcut phục vụ quá trình debug, kiểm thử của lập trình viên.
-   - Lắng nghe sự kiện `contextmenu`: Ngăn chặn chuột phải trên môi trường production.
-   - Lắng nghe sự kiện `keydown`: Chặn các phím `F12`, `Ctrl+Shift+I/J/C`, `Meta+Alt+I/J/C`, `Ctrl+U`, `Ctrl+S`.
-   - **Debugger Timing Trap thông minh (Chống False Positive):**
-     - Chỉ bắt đầu chạy sau khi sự kiện `window.load` hoàn tất kèm độ trễ 2.5s để trình duyệt kết thúc quá trình biên dịch JIT và parse CSS/JS ban đầu (chống gián đoạn main thread lúc cold start).
-     - Đo chu kỳ `setInterval(..., 400)` với lệnh `debugger;`.
-     - Ngưỡng phát hiện nâng lên `t1 - t0 > 160ms` và bắt buộc đạt tối thiểu 2 lần kiểm tra liên tiếp (`consecutiveHits >= 2`) mới kích hoạt `blockAccess()`.
-     - Khi kích hoạt, hàm `blockAccess()` tự động lưu đường dẫn hiện tại vào `sessionStorage.setItem('medonthan_return_url', window.location.pathname + window.location.search + window.location.hash)` trước khi chuyển hướng sang `/nodevtools.html`.
-2. **`src/main.tsx`:**
-   - Bọc thư viện `devtools-detector` trong điều kiện `if (!isLocal && !import.meta.env.DEV)`.
-   - Lưu chuẩn xác `sessionStorage.setItem('medonthan_return_url', ...)` trước khi `window.location.replace('/nodevtools.html')`.
-3. **`nodevtools.html` & `src/nodevtools.tsx`:**
-   - Khi DevTools được đóng lại (hoặc người dùng bấm "Quay lại"), hàm `getReturnUrl()` đọc `sessionStorage.getItem('medonthan_return_url')`. Nếu rỗng, tiếp tục đọc `localStorage.getItem('medonthan_active_page')` (nếu là `'music'` sẽ quay về `/music`, ngược lại `/games`). Đảm bảo người dùng truy cập trực tiếp `/music` không bao giờ bị văng về trang mặc định.
+   - Kiểm tra môi trường cục bộ (`localhost`, `127.0.0.1`, `*.local`): Tự động tắt cơ chế chặn để lập trình viên thoải mái debug, kiểm thử.
+   - **Chặn chuột phải (Context Menu):** Ngăn chặn người dùng mở menu ngữ cảnh để bấm "Inspect" / "Kiểm tra phần tử" trên môi trường production.
+   - **Chặn phím tắt mở DevTools & View Source:** Bắt và chặn toàn bộ các tổ hợp phím tắt:
+     - Phím `F12`.
+     - Phím mở Developer Tools: `Ctrl+Shift+I/J/C`, `Meta+Alt+I/J/C`.
+     - Phím xem mã nguồn: `Ctrl+U`, `Meta+U`.
+     - Phím lưu trang: `Ctrl+S`, `Meta+S`.
+   - Khi phát hiện người dùng cố tình nhấn các tổ hợp phím trên, hàm `blockAccess()` tự động lưu đường dẫn hiện tại vào `sessionStorage.setItem('medonthan_return_url', window.location.pathname + window.location.search + window.location.hash)` và chuyển hướng sang `/nodevtools.html`.
+   - **Loại bỏ vòng lặp bẫy `debugger` ngầm:** Không chạy vòng lặp đo trễ CPU tự động để loại bỏ 100% rủi ro False-Positive làm gián đoạn người dùng bình thường khi mở trang web qua mạng internet.
+2. **`nodevtools.html` & `src/nodevtools.tsx`:**
+   - Trang cảnh báo chuyên dụng độc lập. Khi người dùng bấm "Quay lại" hoặc "Thử lại", hàm `getReturnUrl()` ưu tiên khôi phục URL gốc đã lưu trong `sessionStorage` (hoặc `localStorage`), đảm bảo người dùng trở về đúng trang `/music` hoặc `/games`.
 
 ---
 

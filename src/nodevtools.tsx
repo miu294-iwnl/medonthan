@@ -1,6 +1,5 @@
 import { StrictMode, useState, useEffect } from "react"
 import { createRoot } from "react-dom/client"
-import { addListener, isLaunch, launch } from "devtools-detector"
 import NoDevTools from "./components/NoDevTools"
 import "./index.css"
 
@@ -14,7 +13,6 @@ function StandaloneNoDevTools() {
     } catch {}
     return "vi"
   })
-  const [isStillOpen, setIsStillOpen] = useState(true)
 
   useEffect(() => {
     try {
@@ -36,27 +34,8 @@ function StandaloneNoDevTools() {
     }
   }
 
-  useEffect(() => {
-    const handleDetector = (isOpen: boolean) => {
-      setIsStillOpen(isOpen)
-      if (!isOpen) {
-        // Devtools was closed, redirect back to the page the user was on
-        window.location.replace(getReturnUrl())
-      }
-    }
-
-    addListener(handleDetector)
-    if (!isLaunch()) {
-      launch()
-    }
-  }, [])
-
   const handleRetry = () => {
-    if (!isStillOpen) {
-      window.location.replace(getReturnUrl())
-    } else {
-      window.location.reload()
-    }
+    window.location.replace(getReturnUrl())
   }
 
   return (

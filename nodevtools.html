@@ -424,27 +424,7 @@
         }
       }
 
-      // Realtime DevTools status checker
-      if (!isLocal) {
-        setInterval(function() {
-          var t0 = performance.now();
-          debugger;
-          var t1 = performance.now();
-          if (t1 - t0 > 160) {
-            isDevToolsOpen = true;
-          } else {
-            isDevToolsOpen = false;
-          }
-          document.getElementById('txt-status').textContent = isDevToolsOpen ? translations[currentLang].statusOpen : translations[currentLang].statusClosed;
-          document.getElementById('txt-status').style.color = isDevToolsOpen ? 'var(--color-flame)' : 'var(--color-lime)';
-        }, 500);
-      } else {
-        isDevToolsOpen = false;
-        setTimeout(function() {
-          document.getElementById('txt-status').textContent = translations[currentLang].statusClosed;
-          document.getElementById('txt-status').style.color = 'var(--color-lime)';
-        }, 100);
-      }
+      var isDevToolsOpen = false;
 
       function updateClock() {
         document.getElementById('terminal-time').textContent = new Date().toLocaleTimeString();
@@ -454,12 +434,7 @@
       setLanguage(currentLang);
 
       function handleRetry() {
-        var returnUrl = getReturnUrl();
-        if (!isDevToolsOpen) {
-          window.location.replace(returnUrl);
-        } else {
-          window.location.reload();
-        }
+        window.location.replace(getReturnUrl());
       }
 
       function handleReturnHome() {

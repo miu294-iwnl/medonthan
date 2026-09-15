@@ -38,11 +38,10 @@ Medonthan là ứng dụng web cá nhân cao cấp dùng để quản lý danh s
 - **Chạy cục bộ tức thì (Zero Config):** Tự động phát hiện môi trường: nếu chưa cấu hình `DATABASE_URL`, hệ thống tự động khởi tạo cơ sở dữ liệu SQLite cục bộ (`server/prisma/dev.db`) bằng module chuẩn `node:sqlite` của Node.js 22, tự động tạo bảng và nạp 16 game mẫu cùng tài khoản quản trị mà không cần cài đặt PostgreSQL.
 - **Tương thích 100% Production PostgreSQL:** Khi có chuỗi `DATABASE_URL` (trên Render, Neon, Supabase hoặc PostgreSQL cục bộ), hệ thống tự động chuyển sang `PrismaClient` chính thức để khai thác toàn bộ sức mạnh của PostgreSQL.
 
-### Cơ chế chống can thiệp thông minh (Smart Anti-DevTools Protection)
-- **Tự động tắt trên môi trường phát triển:** Nhận diện `localhost`, `127.0.0.1` và dev mode để tắt toàn bộ bẫy DevTools, giúp lập trình viên thoải mái debug, kiểm thử.
-- **Chống cảnh báo giả khi mở trang (Anti-False-Positive):** Bẫy thời gian thực thi (Debugger Timing Trap) trên production chỉ kích hoạt sau khi sự kiện `window.load` hoàn tất kèm độ trễ 2.5 giây khởi động, với ngưỡng đo `160ms` và bắt buộc 2 lần liên tiếp để tránh việc CPU lag lúc cold start gián đoạn trải nghiệm người dùng.
-- **Bảo toàn Return URL 2 tầng:** Luôn ghi nhớ chính xác đường dẫn người dùng đang truy cập (`/music`, `/games`, `/app/...`) qua `sessionStorage` và `localStorage`, đảm bảo khi DevTools đóng hoặc khi reload không bao giờ bị văng về trang mặc định.
-- Chặn chuột phải (Context Menu) và toàn bộ tổ hợp phím tắt mở công cụ nhà phát triển (F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S) trên môi trường production.
+### Cơ chế chống can thiệp an toàn (Safe Anti-DevTools Protection)
+- **Bảo vệ mã nguồn chuẩn mực:** Chặn menu chuột phải (Context Menu) và chặn toàn bộ tổ hợp phím tắt mở DevTools & View Source (`F12`, `Ctrl+Shift+I/J/C`, `Meta+Alt+I/J/C`, `Ctrl+U`, `Ctrl+S`). Chỉ khi người dùng cố tình nhấn các phím này thì hệ thống mới chuyển hướng sang `/nodevtools.html`.
+- **Loại bỏ 100% cảnh báo giả (Zero False-Positive):** Không sử dụng các vòng lặp đo trễ CPU hay lệnh `debugger` ngầm. Nhờ đó, người dùng thông thường truy cập qua mạng Internet không bao giờ bị chặn nhầm hay bị chuyển trang đột ngột.
+- **Bảo toàn Return URL 2 tầng:** Luôn ghi nhớ chính xác đường dẫn người dùng đang truy cập (`/music`, `/games`, `/app/...`) qua `sessionStorage` và `localStorage`, đảm bảo việc điều hướng luôn chính xác 100%.
 
 ### Định tuyến SPA & Chuẩn hóa Clean URL
 - Tự động chuẩn hóa các biến thể đường dẫn (`/music/`, `/games/`, `*.html`, `/`) thành Clean URL (`/music`, `/games`) bằng `history.replaceState`.
