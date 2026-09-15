@@ -421,6 +421,8 @@ function getInitialPage(): "games" | "music" {
       rawPath.endsWith("/music") ||
       rawPath.endsWith("/music/") ||
       rawPath.includes("/music.") ||
+      rawPath.includes("music") ||
+      full.includes("music") ||
       full.includes("page=music") ||
       full.includes("#music") ||
       full.includes("#/music")
@@ -478,27 +480,49 @@ export default function App() {
     }, 240)
   }
 
-  // Ensure URL defaults to /games (or /music) instead of / or /index.html
+  // Ensure URL is clean and synchronized with current view
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const path = window.location.pathname
+      const lower = path.toLowerCase()
+      const search = window.location.search.toLowerCase()
+      const hash = window.location.hash.toLowerCase()
+      const full = (lower + search + hash).toLowerCase()
+
+      // If URL contains music in any form, lock page to "music" and clean address bar to "/music"
+      if (lower.startsWith("/music") || lower.includes("music") || full.includes("music")) {
+        try { localStorage.setItem(PAGE_STORAGE_KEY, "music") } catch {}
+        if (page !== "music") {
+          setPage("music")
+        }
+        if (path !== "/music") {
+          window.history.replaceState({ page: "music" }, "", "/music")
+        }
+        return
+      }
+
+      // If URL contains games or app route, ensure page is "games"
+      if (lower.startsWith("/games") || lower.includes("/app/")) {
+        try { localStorage.setItem(PAGE_STORAGE_KEY, "games") } catch {}
+        if (page !== "games") {
+          setPage("games")
+        }
+        if (lower === "/games/" || lower === "/games.html") {
+          window.history.replaceState({ page: "games" }, "", "/games")
+        }
+        return
+      }
+
+      // Root path "/" or "/index.html": clean address bar
       try {
         localStorage.setItem(PAGE_STORAGE_KEY, page)
       } catch {}
 
-      const path = window.location.pathname
-      const lower = path.toLowerCase()
-      // If path is root "/" or "/index.html", "*.html", or has trailing slash, clean up address bar with /games or /music
       if (
         !path ||
         path === "/" ||
         lower === "/index.html" ||
-        lower.endsWith("/index.html") ||
-        lower === "/music.html" ||
-        lower.endsWith("/music.html") ||
-        lower === "/games.html" ||
-        lower.endsWith("/games.html") ||
-        lower === "/music/" ||
-        lower === "/games/"
+        lower.endsWith("/index.html")
       ) {
         const targetUrl = page === "music" ? "/music" : "/games"
         window.history.replaceState({ page }, "", targetUrl)
@@ -606,6 +630,8 @@ export default function App() {
         rawPath.endsWith("/music") ||
         rawPath.endsWith("/music/") ||
         rawPath.includes("/music.") ||
+        rawPath.includes("music") ||
+        full.includes("music") ||
         full.includes("page=music") ||
         full.includes("#music") ||
         full.includes("#/music")

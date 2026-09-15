@@ -10,15 +10,12 @@ const indexHtmlPath = path.join(distDir, 'index.html')
 if (fs.existsSync(indexHtmlPath)) {
   const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8')
 
-  // List of sub-routes to generate static index.html copies for
-  const routes = ['music', 'games']
-
-  for (const route of routes) {
+  // Clean up any old subdirectories if they exist to prevent static web servers from issuing directory redirects
+  for (const route of ['music', 'games']) {
     const routeDir = path.join(distDir, route)
-    if (!fs.existsSync(routeDir)) {
-      fs.mkdirSync(routeDir, { recursive: true })
+    if (fs.existsSync(routeDir)) {
+      fs.rmSync(routeDir, { recursive: true, force: true })
     }
-    fs.writeFileSync(path.join(routeDir, 'index.html'), indexHtml, 'utf8')
     fs.writeFileSync(path.join(distDir, `${route}.html`), indexHtml, 'utf8')
   }
 
@@ -26,7 +23,7 @@ if (fs.existsSync(indexHtmlPath)) {
   fs.writeFileSync(path.join(distDir, '404.html'), indexHtml, 'utf8')
   fs.writeFileSync(path.join(distDir, '200.html'), indexHtml, 'utf8')
 
-  console.log('✓ Postbuild: Successfully generated static routes (/music, /games, 404.html, 200.html)')
+  console.log('✓ Postbuild: Cleaned static route directories and generated SPA fallbacks')
 } else {
   console.warn('! Postbuild: dist/index.html not found, skipping route copies.')
 }
